@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu-expansion-neko-science
 // @namespace    https://github.com/fujiyaa/osu-expansion-neko-science
-// @version      0.2.0-beta
+// @version      0.2.1-beta
 // @description  Расширение для осу очень нужное
 // @author       Fujiya
 // @match        https://osu.ppy.sh/*
@@ -17,10 +17,13 @@
   let USERNAME = 'Guest' + Math.floor(100 + Math.random() * 900);
   const HEARTBEAT_INTERVAL = 25000;
   const BOX_ID = 'neko-chat-box';
-  const EXT_VERSION = '0.2.0-beta';
+  const EXT_VERSION = '0.2.1-beta';
   let latestVersion = EXT_VERSION;
 
   const AVATAR_URL_TG = "https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/server-avatar.png"
+
+  const soundChat = new Audio("https://fujiyaa.github.io/forum/extras/default_chat.mp3");
+  soundChat.volume = 0.2;
 
   const nickColors = ['#e6194b','#3cb44b','#ffe119','#4363d8','#f58231','#911eb4','#46f0f0','#f032e6','#bcf60c','#fabebe'];
   const nickMap = {};
@@ -64,7 +67,7 @@
     });
 
     const header = document.createElement('div');
-    header.textContent = '🧊 Чат (NekoScience)';
+    header.textContent = 'чат (neko-science)';
     Object.assign(header.style, {
       background: 'rgb(70,57,63)',
       color: '#fff',
@@ -140,9 +143,18 @@
     settingsPanel.innerHTML = `
       <div style="font-weight:bold; font-size:18px; margin-top:10px; margin-bottom:8px;">Настройки</div>
       <label style="display:block; margin-bottom:8px;">
-        Ник:
+        Нeконейм:
         <input type="text" id="nick-input" placeholder="${USERNAME}" style="margin-left:8px; padding:4px; font-size:14px; width:120px; border-radius:4px; border:none;">
       </label>
+      <label style="display:block; margin-bottom:10px; line-height:1.4;">
+  Чтобы получить значок <strong>osu!</strong>, вставь в поле выше код, который появится после авторизации:
+  <a href="https://myangelfujiya.ru/neko-science/auth-start" target="_blank" style="color:#ff66aa; text-decoration:none; font-weight:500;">
+    myangelfujiya.ru/neko-science/auth-start
+  </a>
+</label><label style="display:block; margin-bottom:8px; cursor:pointer;">
+    <input type="checkbox" id="sound-toggle" style="margin-right:6px;">
+    Включить звуки
+  </label>
       <label style="display:block; margin-bottom:8px; cursor:pointer;">
         <input type="checkbox" id="theme-toggle" style="margin-right:6px;">
         Светлая тема
@@ -197,6 +209,18 @@
       }
     `;
     document.head.appendChild(pulseStyle);
+
+
+const soundToggle = settingsPanel.querySelector('#sound-toggle');
+
+const savedSound = localStorage.getItem('chat_sounds');
+soundToggle.checked = savedSound !== null ? savedSound === 'true' : false;
+
+
+soundToggle.addEventListener('change', () => {
+    localStorage.setItem('chat_sounds', soundToggle.checked);
+});
+
 
     const updatePanel = document.createElement('div');
     Object.assign(updatePanel.style, {
@@ -327,6 +351,8 @@
       localStorage.setItem('chat_username', USERNAME);
       localStorage.setItem('chat_darkTheme', false);
       localStorage.setItem('chat_fontSize', 16);
+      localStorage.setItem('chat_sounds', 'false');
+        soundToggle.checked = false;
     });
 
     const style = document.createElement('style');
@@ -446,6 +472,11 @@ function logMessage(username, text, avatarUrl, tooltipText) {
   line.appendChild(textContainer);
   log.insertAdjacentElement('beforeend', line);
   log.scrollTop = log.scrollHeight;
+
+if (soundToggle.checked) {
+   soundChat.play().catch(e => console.error("Audio play failed:", e));
+}
+
 }
 
 
@@ -469,9 +500,10 @@ function logMessage(username, text, avatarUrl, tooltipText) {
         <div style="font-weight:bold; font-size:18px; margin-top:10px; margin-bottom:8px;">🔄 Обновление</div>
         <div style="font-size:14px; margin-bottom:4px;">Текущая версия: ${EXT_VERSION}</div>
         <div style="font-size:14px; margin-bottom:8px;">Доступна новая версия: ${latestVersion}</div>
-        <div style="font-weight:bold; font-size:18px; margin:0 0 28px 0;">
+        <div style="font-weight:bold; font-size:18px; margin:0 0 16px 0;">
           <a href="https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/osu-expansion-neko-science.user.js" target="_blank" style="color:#4ea1f3; text-decoration:underline;">Установить сейчас</a>
         </div>
+        <div style="font-size:14px; margin-bottom:28px;">Подсказка: дождись загрузки страницы со скриптом, нажми "Перезаписать". После этого обнови текущую страницу.</div>
       `;
       updateBtn.style.display = 'block';
       updateBtn.classList.add('pulse');
