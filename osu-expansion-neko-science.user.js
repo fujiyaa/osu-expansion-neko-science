@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         osu-expansion-neko-science
-// @namespace    http://tampermonkey.net/
+// @namespace    https://github.com/fujiyaa/osu-expansion-neko-science
 // @version      1.0.1
 // @description  Расширение для осу очень нужное
 // @author       Fujiya
 // @match        https://osu.ppy.sh/*
-// @grant        none
-// @downloadURL  https://github.com/darkchii/score-inspector-extension/raw/main/inspector.user.js
-// @updateURL    https://github.com/darkchii/score-inspector-extension/raw/main/inspector.user.js
+// @grant        window.onurlchange
+// @downloadURL  https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/inspector.user.js
+// @updateURL    https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/inspector.user.js
 // ==/UserScript==
 
 (function() {
