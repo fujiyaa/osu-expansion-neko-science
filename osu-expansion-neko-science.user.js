@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu-expansion-neko-science
 // @namespace    https://github.com/fujiyaa/osu-expansion-neko-science
-// @version      0.2.1-beta
+// @version      0.3.1-beta
 // @description  Расширение для осу очень нужное
 // @author       Fujiya
 // @match        https://osu.ppy.sh/*
@@ -13,11 +13,12 @@
 (function() {
   'use strict';
 
-  const WS_URL = 'ws://127.0.0.1:8010/ws/chat';
+  const WS_URL = 'wss://myangelfujiya.ru/neko-science/ws/chat';
+
   let USERNAME = 'Guest' + Math.floor(100 + Math.random() * 900);
   const HEARTBEAT_INTERVAL = 25000;
   const BOX_ID = 'neko-chat-box';
-  const EXT_VERSION = '0.2.1-beta';
+  const EXT_VERSION = '0.3.1-beta';
   let latestVersion = EXT_VERSION;
 
   const AVATAR_URL_TG = "https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/server-avatar.png"
