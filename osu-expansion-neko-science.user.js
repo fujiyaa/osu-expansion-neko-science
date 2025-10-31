@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu-expansion-neko-science
 // @namespace    https://github.com/fujiyaa/osu-expansion-neko-science
-// @version      0.3.2-beta
+// @version      0.3.3-beta
 // @description  Расширение для осу очень нужное
 // @author       Fujiya
 // @match        https://osu.ppy.sh/*
@@ -10,10 +10,9 @@
 // @updateURL    https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/inspector.user.js
 // ==/UserScript==
 
-// Что нового в 0.3.1 -> 0.3.2:
-// - Добавлена поддержка ссылок в чате
-// - Исправлен баг при переходе "назад"
-// - Оптимизация
+// Что нового в 0.3.2 -> 0.3.3:
+// - Видео и картинки отображаются в чате
+// - HTML теги теперь не присылаются в чат (пока что)
 
 (function() {
     'use strict';
@@ -39,7 +38,7 @@
     let USERNAME = 'Guest' + Math.floor(100 + Math.random() * 900);
     const HEARTBEAT_INTERVAL = 25000;
     const BOX_ID = 'neko-chat-box';
-    const EXT_VERSION = '0.3.2-beta';
+    const EXT_VERSION = '0.3.3-beta';
     let latestVersion = EXT_VERSION;
 
     const AVATAR_URL_TG = "https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/server-avatar.png"
@@ -465,59 +464,100 @@
             tooltip.style.top = e.clientY + 10 + 'px';
         });
 
-        function makeLinksClickable(text) {
-            const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/gi;
-            return text.replace(urlRegex, url => {
-                const href = url.startsWith('http') ? url : 'https://' + url;
-                return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#66b3ff; text-decoration:underline;">${url}</a>`;
-            });
+function makeLinksClickable(text) {
+    const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/gi;
+
+    return text.replace(urlRegex, url => {
+        const href = url.startsWith('http') ? url : 'https://' + url;
+
+        // YouTube
+        const ytMatch = href.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+        if (ytMatch) {
+            const videoId = ytMatch[1];
+            const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+            return `<iframe width="288" height="162"
+                        src="${embedUrl}"
+                        frameborder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowfullscreen
+                        style="border-radius:6px; box-shadow:0 0 2px rgba(0,0,0,0.3); vertical-align:top;"></iframe><a href="${href}" target="_blank" rel="noopener noreferrer" style="font-size:0.85em; color:#66b3ff;">🔗</a>`;
         }
-        function logMessage(username, text, avatarUrl, tooltipText) {
-            const line = document.createElement('div');
-            line.classList.add('chat-message');
-            line.style.marginBottom = '4px';
-            line.style.display = 'flex';
-            line.style.alignItems = 'center';
-            line.style.whiteSpace = 'pre-wrap';
-            line.style.wordBreak = 'break-word';
-
-            const avatar = document.createElement('img');
-            avatar.src = avatarUrl || 'https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/guest-avatar.png';
-            avatar.style.width = '20px';
-            avatar.style.height = '20px';
-            avatar.style.borderRadius = '50%';
-            avatar.style.marginRight = '6px';
-            avatar.style.flexShrink = '0';
-            avatar.style.cursor = 'pointer';
-            avatar.style.boxShadow = '0 0 2px rgba(0,0,0,0.4)';
-
-            avatar.addEventListener('mouseenter', () => {
-                tooltip.textContent = tooltipText || username;
-                tooltip.style.opacity = '1';
-            });
-            avatar.addEventListener('mouseleave', () => {
-                tooltip.style.opacity = '0';
-            });
-
-            const textContainer = document.createElement('div');
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = username + ': ';
-            nameSpan.style.fontWeight = 'bold';
-            nameSpan.style.color = getNickColor(username);
-            textContainer.appendChild(nameSpan);
-
-            textContainer.innerHTML += makeLinksClickable(text);
-
-            line.appendChild(avatar);
-            line.appendChild(textContainer);
-            log.insertAdjacentElement('beforeend', line);
-            log.scrollTop = log.scrollHeight;
-
-            if (soundToggle.checked) {
-                soundChat.play().catch(e => console.error("Audio play failed:", e));
-            }
-
+        const IMG_SCALE = 0.1
+        // Изображения
+        if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(href)) {
+            return `<img src="${href}"
+                         style="max-width:auto; max-height:12em; border-radius:6px; box-shadow:0 0 2px rgba(0,0,0,0.3); vertical-align:top; cursor:default;"
+                         loading="lazy"
+                         onerror="this.style.display='none';"><a href="${href}" target="_blank" rel="noopener noreferrer" style="font-size:0.85em; color:#66b3ff;">🔗</a>`;
         }
+
+        // Ссылки
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#66b3ff; text-decoration:underline;">${url}</a>`;
+    });
+}
+
+function logMessage(username, text, avatarUrl, tooltipText) {
+    const line = document.createElement('div');
+    line.classList.add('chat-message');
+    Object.assign(line.style, {
+        display: 'flex',
+        alignItems: 'flex-start', // основной контейнер
+        gap: '6px',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        marginBottom: '4px'
+    });
+
+    // Аватар
+    const avatar = document.createElement('img');
+    avatar.src = avatarUrl || 'https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/guest-avatar.png';
+    Object.assign(avatar.style, {
+        alignItems: 'flex-start',
+        width: '1.2em',
+        height: '1.2em',
+        borderRadius: '50%',
+        cursor: 'pointer',
+        boxShadow: '0 0 2px rgba(0,0,0,0.4)',
+        flexShrink: 0,
+        verticalAlign: 'middle'
+    });
+    avatar.addEventListener('mouseenter', () => { tooltip.textContent = tooltipText || username; tooltip.style.opacity = '1'; });
+    avatar.addEventListener('mouseleave', () => { tooltip.style.opacity = '0'; });
+
+    // Контейнер для ник + текст + медиа в одной строке
+    const content = document.createElement('div');
+    Object.assign(content.style, {
+        alignItems: 'flex-start',
+        display: 'flex',
+        flexWrap: 'wrap',
+        flexDirection: 'row',
+        gap: '4px'
+    });
+
+    // Ник
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = username + ':';
+    nameSpan.style.fontWeight = 'bold';
+    nameSpan.style.color = getNickColor(username);
+
+    // Текст + медиа
+    const textSpan = document.createElement('span');
+    textSpan.innerHTML = makeLinksClickable(text);
+
+    content.appendChild(nameSpan);
+    content.appendChild(textSpan);
+
+    line.appendChild(avatar);
+    line.appendChild(content);
+
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+
+    if (soundToggle.checked) {
+        soundChat.play().catch(e => console.error("Audio play failed:", e));
+    }
+}
+
 
 
         const ws = new WebSocket(WS_URL);
@@ -545,18 +585,18 @@
         </div>
         <div style="font-size:14px; margin-bottom:28px;">Подсказка: дождись загрузки страницы со скриптом, нажми "Перезаписать". После этого обнови текущую страницу.</div>
       `;
-                  updateBtn.style.display = 'block';
-                  updateBtn.classList.add('pulse');
-                  return;
-              }
-              if (msg.type === 'heartbeat') return;
-              if (msg.type === 'message') {
-                  logMessage(msg.username, msg.message, msg.avatar, msg.tooltip);
-              }
-          } catch {
-              logMessage('System', e.data);
-          }
-      };
+                    updateBtn.style.display = 'block';
+                    updateBtn.classList.add('pulse');
+                    return;
+                }
+                if (msg.type === 'heartbeat') return;
+                if (msg.type === 'message') {
+                    logMessage(msg.username, msg.message, msg.avatar, msg.tooltip);
+                }
+            } catch {
+                logMessage('System', e.data);
+            }
+        };
         ws.onclose = ()=>{ logMessage('Сервер','❌ Отключено', AVATAR_URL_TG); clearInterval(heartbeat); };
         ws.onerror = ()=>{ logMessage('Сервер','⚠️ Нет связи', AVATAR_URL_TG); };
 
