@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu-expansion-neko-science
 // @namespace    https://github.com/fujiyaa/osu-expansion-neko-science
-// @version      0.3.3-beta
+// @version      0.3.4-beta
 // @description  Расширение для осу очень нужное
 // @author       Fujiya
 // @match        https://osu.ppy.sh/*
@@ -10,14 +10,14 @@
 // @updateURL    https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/inspector.user.js
 // ==/UserScript==
 
-// Что нового в 0.3.2 -> 0.3.3:
-// - Видео и картинки отображаются в чате
-// - HTML теги теперь не присылаются в чат (пока что)
+// Что нового в 0.3.3 -> 0.3.4:
+// - Таймкод сообщения
+// - Улучшенное форматирование
  
 (function() {
     'use strict';
 
-    const RESET_ON_START = true;
+    const RESET_ON_START = false;
     const PREFIX = 'neko-chat-box-';
     const STORAGE_ID_KEY = 'neko_chat_last_id';
     const POS_KEY = 'neko_chat_box_pos';
@@ -38,10 +38,12 @@
     let USERNAME = 'Guest' + Math.floor(100 + Math.random() * 900);
     const HEARTBEAT_INTERVAL = 25000;
     const BOX_ID = 'neko-chat-box';
-    const EXT_VERSION = '0.3.3-beta';
+    const EXT_VERSION = '0.3.4-beta';
     let latestVersion = EXT_VERSION;
 
     const AVATAR_URL_TG = "https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/server-avatar.png"
+
+    let justifyText = false
 
     const soundChat = new Audio("https://fujiyaa.github.io/forum/extras/default_chat.mp3");
     soundChat.volume = 0.2;
@@ -131,7 +133,7 @@
             paddingRight: '48px'
         });
         input.placeholder = 'Написать...';
-        input.maxLength = 100;
+        input.maxLength = 300;
 
         box.append(header, log, input);
         document.body.appendChild(box);
@@ -481,12 +483,11 @@ function makeLinksClickable(text) {
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                         allowfullscreen
                         style="border-radius:6px; box-shadow:0 0 2px rgba(0,0,0,0.3); vertical-align:top;"></iframe><a href="${href}" target="_blank" rel="noopener noreferrer" style="font-size:0.85em; color:#66b3ff;">🔗</a>`;
-        }
-        const IMG_SCALE = 0.1
+        }        
         // Изображения
         if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(href)) {
             return `<img src="${href}"
-                         style="max-width:auto; max-height:12em; border-radius:6px; box-shadow:0 0 2px rgba(0,0,0,0.3); vertical-align:top; cursor:default;"
+                         style="max-width:auto; max-height:10em; border-radius:6px; box-shadow:0 0 2px rgba(0,0,0,0.3); vertical-align:top; cursor:default;"
                          loading="lazy"
                          onerror="this.style.display='none';"><a href="${href}" target="_blank" rel="noopener noreferrer" style="font-size:0.85em; color:#66b3ff;">🔗</a>`;
         }
@@ -496,60 +497,91 @@ function makeLinksClickable(text) {
     });
 }
 
-function logMessage(username, text, avatarUrl, tooltipText) {
+
+function logMessage(username, text, avatarUrl, tooltipText, timestamp = "") {
     const line = document.createElement('div');
     line.classList.add('chat-message');
     Object.assign(line.style, {
-        display: 'flex',
-        alignItems: 'flex-start', // основной контейнер
-        gap: '6px',
-        whiteSpace: 'pre-wrap',
+        display: 'block',
+        marginBottom: '4px',
+        lineHeight: '1.3em',
         wordBreak: 'break-word',
-        marginBottom: '4px'
+        whiteSpace: 'pre-wrap'
     });
+
+    // Контейнер для всего сообщения
+    const content = document.createElement('span');
+    Object.assign(content.style, {
+        display: 'inline-block',
+        maxWidth: '100%',
+        textAlign: justifyText ? 'justify' : 'left',
+        textAlignLast: 'left',
+        wordSpacing: justifyText ? '0.2em' : 'normal'
+    });
+
+    // Время (если передано)
+    if (timestamp) {
+        const date = new Date(timestamp);
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+
+        const timeSpan = document.createElement('span');
+        timeSpan.textContent = `${hours}:${minutes}`;
+        Object.assign(timeSpan.style, {
+            color: '#888',
+            fontSize: '0.85em',
+            marginRight: '6px',
+            verticalAlign: 'middle'
+        });
+
+        content.appendChild(timeSpan);
+    }
 
     // Аватар
     const avatar = document.createElement('img');
     avatar.src = avatarUrl || 'https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/guest-avatar.png';
     Object.assign(avatar.style, {
-        alignItems: 'flex-start',
         width: '1.2em',
         height: '1.2em',
         borderRadius: '50%',
         cursor: 'pointer',
         boxShadow: '0 0 2px rgba(0,0,0,0.4)',
-        flexShrink: 0,
+        marginRight: '4px',
         verticalAlign: 'middle'
     });
     avatar.addEventListener('mouseenter', () => { tooltip.textContent = tooltipText || username; tooltip.style.opacity = '1'; });
     avatar.addEventListener('mouseleave', () => { tooltip.style.opacity = '0'; });
 
-    // Контейнер для ник + текст + медиа в одной строке
-    const content = document.createElement('div');
-    Object.assign(content.style, {
-        alignItems: 'flex-start',
-        display: 'flex',
-        flexWrap: 'wrap',
-        flexDirection: 'row',
-        gap: '4px'
-    });
-
-    // Ник
+    // Имя
     const nameSpan = document.createElement('span');
     nameSpan.textContent = username + ':';
-    nameSpan.style.fontWeight = 'bold';
-    nameSpan.style.color = getNickColor(username);
+    Object.assign(nameSpan.style, {
+        fontWeight: 'bold',
+        color: getNickColor(username),
+        marginRight: '4px',
+        verticalAlign: 'middle'
+    });
 
-    // Текст + медиа
+    // Текст
+    let adjustedText = text;
+
+    // Проверяем первое слово
+    const firstSpace = text.indexOf(' ');
+    const firstWord = firstSpace === -1 ? text : text.slice(0, firstSpace);
+    if (firstWord.length > 15) {
+        adjustedText = ' ' + text; // добавляем пробел перед текстом
+    }
+
     const textSpan = document.createElement('span');
-    textSpan.innerHTML = makeLinksClickable(text);
+    textSpan.innerHTML = makeLinksClickable(adjustedText);
+    textSpan.style.verticalAlign = 'middle';
 
+    // Собираем
+    content.appendChild(avatar);
     content.appendChild(nameSpan);
     content.appendChild(textSpan);
 
-    line.appendChild(avatar);
     line.appendChild(content);
-
     log.appendChild(line);
     log.scrollTop = log.scrollHeight;
 
@@ -557,6 +589,11 @@ function logMessage(username, text, avatarUrl, tooltipText) {
         soundChat.play().catch(e => console.error("Audio play failed:", e));
     }
 }
+
+
+
+
+
 
 
 
@@ -591,7 +628,7 @@ function logMessage(username, text, avatarUrl, tooltipText) {
                 }
                 if (msg.type === 'heartbeat') return;
                 if (msg.type === 'message') {
-                    logMessage(msg.username, msg.message, msg.avatar, msg.tooltip);
+                    logMessage(msg.username, msg.message, msg.avatar, msg.tooltip, msg.timestamp);
                 }
             } catch {
                 logMessage('System', e.data);
