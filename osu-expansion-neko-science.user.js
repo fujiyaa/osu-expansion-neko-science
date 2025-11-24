@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu-expansion-neko-science
 // @namespace    https://github.com/fujiyaa/osu-expansion-neko-science
-// @version      0.3.6-beta
+// @version      0.3.7-beta
 // @description  Расширение для осу очень нужное
 // @author       Fujiya
 // @match        https://osu.ppy.sh/*
@@ -10,7 +10,7 @@
 // @updateURL    https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/inspector.user.js
 // ==/UserScript==
 
-// Что нового в 0.3.5 -> 0.3.6:
+// Что нового в 0.3.5 -> 0.3.7:
 // - Зимнее обновление (оптимизация)
  
 (function() {
@@ -37,7 +37,7 @@
     let USERNAME = 'Guest' + Math.floor(100 + Math.random() * 900);
     const HEARTBEAT_INTERVAL = 25000;
     const BOX_ID = 'neko-chat-box';
-    const EXT_VERSION = '0.3.6-beta';
+    const EXT_VERSION = '0.3.7-beta';
     let latestVersion = EXT_VERSION;
 
     const AVATAR_URL_TG = "https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/server-avatar.png"
