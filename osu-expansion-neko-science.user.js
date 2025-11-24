@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu-expansion-neko-science
 // @namespace    https://github.com/fujiyaa/osu-expansion-neko-science
-// @version      0.3.7-beta
+// @version      0.3.8-beta
 // @description  Расширение для осу очень нужное
 // @author       Fujiya
 // @match        https://osu.ppy.sh/*
@@ -10,13 +10,16 @@
 // @updateURL    https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/inspector.user.js
 // ==/UserScript==
 
-// Что нового в 0.3.5 -> 0.3.7:
-// - Зимнее обновление (оптимизация)
- 
+// Что нового в 0.3.7 -> 0.3.8:
+// - Настройка снега теперь действительно выключает снег
+// - Добавлены настройки для положения чата и другое
+
 (function() {
     'use strict';
 
-    const RESET_ON_START = false;
+    let RESET_ON_START = localStorage.getItem('chat_resetOnStart') === 'true'; // поменять на false на один запуск, если чат остался за пределами окна
+
+
     const PREFIX = 'neko-chat-box-';
     const STORAGE_ID_KEY = 'neko_chat_last_id';
     const POS_KEY = 'neko_chat_box_pos';
@@ -37,12 +40,13 @@
     let USERNAME = 'Guest' + Math.floor(100 + Math.random() * 900);
     const HEARTBEAT_INTERVAL = 25000;
     const BOX_ID = 'neko-chat-box';
-    const EXT_VERSION = '0.3.7-beta';
+    const EXT_VERSION = '0.3.8-beta';
     let latestVersion = EXT_VERSION;
 
     const AVATAR_URL_TG = "https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/server-avatar.png"
 
     let justifyText = false
+    let snowEnabled = true;
 
     const soundChat = new Audio("https://fujiyaa.github.io/forum/extras/default_chat.mp3");
     soundChat.volume = 0.2;
@@ -68,166 +72,166 @@
         let existingBox = document.querySelector('#' + BOX_ID);
         if (existingBox) return;
 
+
         (function() {
-    // Настройки
-const SNOWFLAKE_COUNT = 80;
-const SNOWFLAKE_MIN_SPEED = 0.3;
-const SNOWFLAKE_MAX_SPEED = 0.5;
-const SNOWFLAKE_RADIUS = 5.0;
-const ACCUMULATION_LIMIT = 20;
+            // Настройки
+            const SNOWFLAKE_COUNT = 80;
+            const SNOWFLAKE_MIN_SPEED = 0.3;
+            const SNOWFLAKE_MAX_SPEED = 0.5;
+            const SNOWFLAKE_RADIUS = 5.0;
+            const ACCUMULATION_LIMIT = 20;
 
-// Основной холст
-const canvas = document.createElement('canvas');
-canvas.id = 'snowCanvas';
-document.body.appendChild(canvas);
+            // Основной холст
+            const canvas = document.createElement('canvas');
+            canvas.id = 'snowCanvas';
+            document.body.appendChild(canvas);
 
-Object.assign(canvas.style, {
-    position: 'fixed',
-    top: '0',
-    left: '0',
-    width: '100%',
-    height: '100%',
-    pointerEvents: 'none',
-    zIndex: '0'
-});
-const ctx = canvas.getContext('2d');
-let w = canvas.width = window.innerWidth;
-let h = canvas.height = window.innerHeight;
+            Object.assign(canvas.style, {
+                position: 'fixed',
+                top: '0',
+                left: '0',
+                width: '100%',
+                height: '100%',
+                pointerEvents: 'none',
+                zIndex: '0'
+            });
+            const ctx = canvas.getContext('2d');
+            let w = canvas.width = window.innerWidth;
+            let h = canvas.height = window.innerHeight;
 
-const snowLayer = document.createElement('canvas');
-const snowCtx = snowLayer.getContext('2d');
-snowLayer.width = w;
-snowLayer.height = h;
+            const snowLayer = document.createElement('canvas');
+            const snowCtx = snowLayer.getContext('2d');
+            snowLayer.width = w;
+            snowLayer.height = h;
 
-let accumulation = new Array(w).fill(0);
+            let accumulation = new Array(w).fill(0);
 
-let snowflakes = [];
-for (let i = 0; i < SNOWFLAKE_COUNT; i++) {
-    const speed = SNOWFLAKE_MIN_SPEED + Math.random() * (SNOWFLAKE_MAX_SPEED - SNOWFLAKE_MIN_SPEED);
+            let snowflakes = [];
+            for (let i = 0; i < SNOWFLAKE_COUNT; i++) {
+                const speed = SNOWFLAKE_MIN_SPEED + Math.random() * (SNOWFLAKE_MAX_SPEED - SNOWFLAKE_MIN_SPEED);
 
-    snowflakes.push({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        speed: speed,
-        radius: SNOWFLAKE_RADIUS * (speed / SNOWFLAKE_MAX_SPEED),
-        drift: 0
-    });
-}
-
-
-let mouseX = 0;
-let lastMouseX = 0;
-let snowEnabled = true;
-
-//window.addEventListener('mousemove', e => {
-//    mouseX = e.clientX;
-//});
-
-window.addEventListener('resize', () => {
-    w = canvas.width = window.innerWidth;
-    h = canvas.height = window.innerHeight;
-
-    snowLayer.width = w;
-    snowLayer.height = h;
-
-    accumulation = new Array(w).fill(0);
-    updateSnowLayer();
-});
+                snowflakes.push({
+                    x: Math.random() * w,
+                    y: Math.random() * h,
+                    speed: speed,
+                    radius: SNOWFLAKE_RADIUS * (speed / SNOWFLAKE_MAX_SPEED),
+                    drift: 0
+                });
+            }
 
 
-function updateSnowLayer() {
-    snowCtx.clearRect(0, 0, w, h);
-    snowCtx.fillStyle = 'rgba(255,255,255,0.7)';
-    snowCtx.beginPath();
+            let mouseX = 0;
+            let lastMouseX = 0;
 
-    for (let i = 0; i < w; i++) {
-        let height = accumulation[i];
-        if (height > 0) {
-            snowCtx.rect(i, h - height, 1, height);
-        }
-    }
+            //window.addEventListener('mousemove', e => {
+            //    mouseX = e.clientX;
+            //});
 
-    snowCtx.fill();
-}
+            window.addEventListener('resize', () => {
+                w = canvas.width = window.innerWidth;
+                h = canvas.height = window.innerHeight;
 
-function drawSnow() {
-    if (!snowEnabled) {
-        requestAnimationFrame(drawSnow);
-        return;
-    }
+                snowLayer.width = w;
+                snowLayer.height = h;
 
-    ctx.clearRect(0, 0, w, h);
-
-    let deltaX = mouseX - lastMouseX;
-
-    snowflakes.forEach(flake => {
-        flake.drift = -deltaX * 0.05;
-
-        let idx = Math.floor(flake.x);
-        if (idx < 0) idx = 0;
-        if (idx >= w) idx = w - 1;
-
-        let normalizedY = flake.y / (h - accumulation[idx]);
-        normalizedY = Math.min(1, normalizedY);
-
-        let minSpeedFactor = 0.3;
-        let speedFactor = minSpeedFactor + (1 - minSpeedFactor) * Math.exp(-3 * normalizedY);
-        let vy = flake.speed * speedFactor;
-
-        flake.x += flake.drift;
-        flake.y += vy;
-
-        if (flake.x < 0) flake.x += w;
-        if (flake.x > w) flake.x -= w;
-
-        if (flake.y >= h - accumulation[idx]) {
-            accumulation[idx] = Math.min(accumulation[idx] + 0.7, ACCUMULATION_LIMIT);
-            if (idx > 0) accumulation[idx - 1] = Math.min(accumulation[idx - 1] + 0.3, ACCUMULATION_LIMIT);
-            if (idx < w - 1) accumulation[idx + 1] = Math.min(accumulation[idx + 1] + 0.3, ACCUMULATION_LIMIT);
-
-            updateSnowLayer();
-            flake.y = 0;
-            flake.x = Math.random() * w;
-        }
-
-        ctx.beginPath();
-        ctx.arc(flake.x, flake.y, flake.radius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255,255,255,0.8)';
-        ctx.fill();
-    });
-
-    ctx.drawImage(snowLayer, 0, 0);
-
-    lastMouseX = mouseX;
-    requestAnimationFrame(drawSnow);
-}
-
-drawSnow();
+                accumulation = new Array(w).fill(0);
+                updateSnowLayer();
+            });
 
 
-})();
+            function updateSnowLayer() {
+                snowCtx.clearRect(0, 0, w, h);
+                snowCtx.fillStyle = 'rgba(255,255,255,0.7)';
+                snowCtx.beginPath();
 
-const elements = document.querySelectorAll('.osu-page--forum, .osu-page--forum-topic');
+                for (let i = 0; i < w; i++) {
+                    let height = accumulation[i];
+                    if (height > 0) {
+                        snowCtx.rect(i, h - height, 1, height);
+                    }
+                }
 
-elements.forEach(el => {
-    const style = getComputedStyle(el);
-    let bg = style.backgroundColor;
+                snowCtx.fill();
+            }
 
-    let rgba;
-    if (bg.startsWith('rgb(')) {
-        rgba = bg.replace('rgb(', 'rgba(').replace(')', ', 0.9)');
-    } else if (bg.startsWith('rgba(')) {
-        rgba = bg.replace(/rgba\(([^)]+),\s*([0-9.]+)\)/, 'rgba($1, 0.9)');
-    } else {
-        rgba = bg;
-        console.warn('damn', el, '???', bg);
-    }
+            function drawSnow() {
+                if (!snowEnabled) {
+                    requestAnimationFrame(drawSnow);
+                    return;
+                }
 
-    Object.assign(el.style, {
-    zIndex: '1',
-    backgroundColor: rgba
-    });
-});
+                ctx.clearRect(0, 0, w, h);
+
+                let deltaX = mouseX - lastMouseX;
+
+                snowflakes.forEach(flake => {
+                    flake.drift = -deltaX * 0.05;
+
+                    let idx = Math.floor(flake.x);
+                    if (idx < 0) idx = 0;
+                    if (idx >= w) idx = w - 1;
+
+                    let normalizedY = flake.y / (h - accumulation[idx]);
+                    normalizedY = Math.min(1, normalizedY);
+
+                    let minSpeedFactor = 0.3;
+                    let speedFactor = minSpeedFactor + (1 - minSpeedFactor) * Math.exp(-3 * normalizedY);
+                    let vy = flake.speed * speedFactor;
+
+                    flake.x += flake.drift;
+                    flake.y += vy;
+
+                    if (flake.x < 0) flake.x += w;
+                    if (flake.x > w) flake.x -= w;
+
+                    if (flake.y >= h - accumulation[idx]) {
+                        accumulation[idx] = Math.min(accumulation[idx] + 0.7, ACCUMULATION_LIMIT);
+                        if (idx > 0) accumulation[idx - 1] = Math.min(accumulation[idx - 1] + 0.3, ACCUMULATION_LIMIT);
+                        if (idx < w - 1) accumulation[idx + 1] = Math.min(accumulation[idx + 1] + 0.3, ACCUMULATION_LIMIT);
+
+                        updateSnowLayer();
+                        flake.y = 0;
+                        flake.x = Math.random() * w;
+                    }
+
+                    ctx.beginPath();
+                    ctx.arc(flake.x, flake.y, flake.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                    ctx.fill();
+                });
+
+                ctx.drawImage(snowLayer, 0, 0);
+
+                lastMouseX = mouseX;
+                requestAnimationFrame(drawSnow);
+            }
+
+            drawSnow();
+
+
+        })();
+
+        const elements = document.querySelectorAll('.osu-page--forum, .osu-page--forum-topic');
+
+        elements.forEach(el => {
+            const style = getComputedStyle(el);
+            let bg = style.backgroundColor;
+
+            let rgba;
+            if (bg.startsWith('rgb(')) {
+                rgba = bg.replace('rgb(', 'rgba(').replace(')', ', 0.9)');
+            } else if (bg.startsWith('rgba(')) {
+                rgba = bg.replace(/rgba\(([^)]+),\s*([0-9.]+)\)/, 'rgba($1, 0.9)');
+            } else {
+                rgba = bg;
+                console.warn('damn', el, '???', bg);
+            }
+
+            Object.assign(el.style, {
+                zIndex: '1',
+                backgroundColor: rgba
+            });
+        });
 
         lastId++;
         localStorage.setItem(STORAGE_ID_KEY, lastId);
@@ -330,34 +334,89 @@ elements.forEach(el => {
             borderTop: '1px solid rgba(255,255,255,0.1)'
         });
         settingsPanel.innerHTML = `
-      <div style="font-weight:bold; font-size:18px; margin-top:10px; margin-bottom:8px;">Настройки</div>
-      <label style="display:block; margin-bottom:8px;">
-        Нeконейм:
-        <input type="text" id="nick-input" placeholder="${USERNAME}" style="margin-left:8px; padding:4px; font-size:14px; width:120px; border-radius:4px; border:none;">
-      </label>
-      <label style="display:block; margin-bottom:10px; line-height:1.4;">
-  Чтобы получить значок <strong>osu!</strong>, вставь в поле выше код, который появится после авторизации:
-  <a href="https://myangelfujiya.ru/neko-science/auth-start" target="_blank" style="color:#ff66aa; text-decoration:none; font-weight:500;">
-    myangelfujiya.ru/neko-science/auth-start
-  </a>
-</label><label style="display:block; margin-bottom:8px; cursor:pointer;">
-    <input type="checkbox" id="sound-toggle" style="margin-right:6px;">
-    Включить звуки
-  </label>
-      <label style="display:block; margin-bottom:8px; cursor:pointer;">
-        <input type="checkbox" id="theme-toggle" style="margin-right:6px;">
-        Светлая тема
-      </label>
-      <label style="display:block; margin-bottom:8px; cursor:pointer;">
-    <input type="checkbox" id="snow-toggle" style="margin-right:6px;">
-    Снег
+        <style>
+        .toggle-label {
+  display: block;
+  margin-bottom: 10px; /* одинаковый отступ */
+  cursor: pointer;
+  line-height: 1.4;
+}
+.toggle-label input[type="checkbox"] {
+  margin-right: 6px;
+}
+</style>
+
+     <div style="font-weight:bold; font-size:18px; margin-top:10px; margin-bottom:8px;">Настройки</div>
+
+<label class="toggle-label">
+  Нeконейм:
+  <input type="text" id="nick-input" placeholder="${USERNAME}" style="margin-left:8px; padding:4px; font-size:14px; width:180px; border-radius:1px; border:none;">
 </label>
-      <label style="display:block; margin-bottom:10px;">
-        Размер шрифта:
-        <input type="range" id="font-size-slider" min="12" max="24" value="16" style="width:100%; margin-top:4px;">
-      </label>
+
+<label class="toggle-label">
+  Чтобы получить значок <strong>osu!</strong>, вставь в поле выше код, который появится после авторизации:
+  <a href="https://myangelfujiya.ru/neko-science/auth-start" target="_blank" style="color:#ff66aa; text-decoration:none; font-weight:500;">myangelfujiya.ru/neko-science/auth-start</a>
+</label>
+
+<label class="toggle-label">
+  <input type="checkbox" id="sound-toggle">
+  Включить звуки
+</label>
+
+<label class="toggle-label">
+  <input type="checkbox" id="theme-toggle">
+  Светлая тема
+</label>
+
+<label class="toggle-label">
+  <input type="checkbox" id="snow-toggle">
+  Снег
+</label>
+
+<label class="toggle-label">
+  <input type="checkbox" id="reset-on-start-toggle">
+  Сброс положения - если выключено, всегда сохраняет положение и размер, но может оставить чат за пределами окна
+</label>
+
+<label class="toggle-label">
+  <input type="checkbox" id="justify-text-toggle">
+  Выравнивание текста по ширине - лучше не включать
+</label>
+
+<label class="toggle-label">
+  Размер шрифта:
+  <input type="range" id="font-size-slider" min="12" max="32" value="18" style="width:80%; margin-top:4px;">
+</label>
+
+
+
     `;
         box.appendChild(settingsPanel);
+
+
+        const resetToggle = settingsPanel.querySelector('#reset-on-start-toggle');
+        const justifyToggle = settingsPanel.querySelector('#justify-text-toggle');
+
+
+        const savedReset = localStorage.getItem('chat_resetOnStart');
+        RESET_ON_START = savedReset !== null ? savedReset === 'true' : false;
+        resetToggle.checked = RESET_ON_START;
+
+        const savedJustify = localStorage.getItem('chat_justifyText');
+        justifyText = savedJustify !== null ? savedJustify === 'true' : false;
+        justifyToggle.checked = justifyText;
+
+
+        resetToggle.addEventListener('change', () => {
+            RESET_ON_START = resetToggle.checked;
+            localStorage.setItem('chat_resetOnStart', RESET_ON_START);
+        });
+
+        justifyToggle.addEventListener('change', () => {
+            justifyText = justifyToggle.checked;
+            localStorage.setItem('chat_justifyText', justifyText);
+        });
+
 
         const resetBtn = document.createElement('button');
         resetBtn.textContent = 'Сбросить';
@@ -404,24 +463,20 @@ elements.forEach(el => {
         document.head.appendChild(pulseStyle);
 
         const snowToggle = settingsPanel.querySelector('#snow-toggle');
-
-        // Сначала подгружаем сохранённое значение
         const savedSnow = localStorage.getItem('chat_snow');
+
         snowToggle.checked = savedSnow !== null ? savedSnow === 'true' : true;
+        snowEnabled = snowToggle.checked;
 
-        // Потом инициализируем переменную snowEnabled
-        let snowEnabled = snowToggle.checked;
-
-        // Если есть canvas — отображаем его согласно состоянию
-        const snowCanvas = document.getElementById('snow-canvas');
+        const snowCanvas = document.getElementById('snowCanvas');
         if (snowCanvas) snowCanvas.style.display = snowEnabled ? 'block' : 'none';
 
-        // Обработчик переключателя
         snowToggle.addEventListener('change', () => {
-            snowEnabled = snowToggle.checked; // обновляем переменную
+            snowEnabled = snowToggle.checked;
             localStorage.setItem('chat_snow', snowEnabled);
             if (snowCanvas) snowCanvas.style.display = snowEnabled ? 'block' : 'none';
         });
+
 
 
 
@@ -652,18 +707,18 @@ elements.forEach(el => {
             tooltip.style.top = e.clientY + 10 + 'px';
         });
 
-function makeLinksClickable(text) {
-    const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/gi;
+        function makeLinksClickable(text) {
+            const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/gi;
 
-    return text.replace(urlRegex, url => {
-        const href = url.startsWith('http') ? url : 'https://' + url;
+            return text.replace(urlRegex, url => {
+                const href = url.startsWith('http') ? url : 'https://' + url;
 
-        // YouTube
-        const ytMatch = href.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
-        if (ytMatch) {
-            const videoId = ytMatch[1];
-            const embedUrl = `https://www.youtube.com/embed/${videoId}`;
-            return `<iframe width="288" height="162"
+                // YouTube
+                const ytMatch = href.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+                if (ytMatch) {
+                    const videoId = ytMatch[1];
+                    const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+                    return `<iframe width="288" height="162"
                         src="${embedUrl}"
                         frameborder="0"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -684,97 +739,97 @@ function makeLinksClickable(text) {
 }
 
 
-function logMessage(username, text, avatarUrl, tooltipText, timestamp = "") {
-    const line = document.createElement('div');
-    line.classList.add('chat-message');
-    Object.assign(line.style, {
-        display: 'block',
-        marginBottom: '4px',
-        lineHeight: '1.3em',
-        wordBreak: 'break-word',
-        whiteSpace: 'pre-wrap'
-    });
+        function logMessage(username, text, avatarUrl, tooltipText, timestamp = "") {
+            const line = document.createElement('div');
+            line.classList.add('chat-message');
+            Object.assign(line.style, {
+                display: 'block',
+                marginBottom: '4px',
+                lineHeight: '1.3em',
+                wordBreak: 'break-word',
+                whiteSpace: 'pre-wrap'
+            });
 
-    // Контейнер для всего сообщения
-    const content = document.createElement('span');
-    Object.assign(content.style, {
-        display: 'inline-block',
-        maxWidth: '100%',
-        textAlign: justifyText ? 'justify' : 'left',
-        textAlignLast: 'left',
-        wordSpacing: justifyText ? '0.2em' : 'normal'
-    });
+            // Контейнер для всего сообщения
+            const content = document.createElement('span');
+            Object.assign(content.style, {
+                display: 'inline-block',
+                maxWidth: '100%',
+                textAlign: justifyText ? 'justify' : 'left',
+                textAlignLast: 'left',
+                wordSpacing: justifyText ? '0.2em' : 'normal'
+            });
 
-    // Время (если передано)
-    if (timestamp) {
-        const date = new Date(timestamp);
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
+            // Время (если передано)
+            if (timestamp) {
+                const date = new Date(timestamp);
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
 
-        const timeSpan = document.createElement('span');
-        timeSpan.textContent = `${hours}:${minutes}`;
-        Object.assign(timeSpan.style, {
-            color: '#888',
-            fontSize: '0.85em',
-            marginRight: '6px',
-            verticalAlign: 'middle'
-        });
+                const timeSpan = document.createElement('span');
+                timeSpan.textContent = `${hours}:${minutes}`;
+                Object.assign(timeSpan.style, {
+                    color: '#888',
+                    fontSize: '0.85em',
+                    marginRight: '6px',
+                    verticalAlign: 'middle'
+                });
 
-        content.appendChild(timeSpan);
-    }
+                content.appendChild(timeSpan);
+            }
 
-    // Аватар
-    const avatar = document.createElement('img');
-    avatar.src = avatarUrl || 'https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/guest-avatar.png';
-    Object.assign(avatar.style, {
-        width: '1.2em',
-        height: '1.2em',
-        borderRadius: '50%',
-        cursor: 'pointer',
-        boxShadow: '0 0 2px rgba(0,0,0,0.4)',
-        marginRight: '4px',
-        verticalAlign: 'middle'
-    });
-    avatar.addEventListener('mouseenter', () => { tooltip.textContent = tooltipText || username; tooltip.style.opacity = '1'; });
-    avatar.addEventListener('mouseleave', () => { tooltip.style.opacity = '0'; });
+            // Аватар
+            const avatar = document.createElement('img');
+            avatar.src = avatarUrl || 'https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/guest-avatar.png';
+            Object.assign(avatar.style, {
+                width: '1.2em',
+                height: '1.2em',
+                borderRadius: '50%',
+                cursor: 'pointer',
+                boxShadow: '0 0 2px rgba(0,0,0,0.4)',
+                marginRight: '4px',
+                verticalAlign: 'middle'
+            });
+            avatar.addEventListener('mouseenter', () => { tooltip.textContent = tooltipText || username; tooltip.style.opacity = '1'; });
+            avatar.addEventListener('mouseleave', () => { tooltip.style.opacity = '0'; });
 
-    // Имя
-    const nameSpan = document.createElement('span');
-    nameSpan.textContent = username + ':';
-    Object.assign(nameSpan.style, {
-        fontWeight: 'bold',
-        color: getNickColor(username),
-        marginRight: '4px',
-        verticalAlign: 'middle'
-    });
+            // Имя
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = username + ':';
+            Object.assign(nameSpan.style, {
+                fontWeight: 'bold',
+                color: getNickColor(username),
+                marginRight: '4px',
+                verticalAlign: 'middle'
+            });
 
-    // Текст
-    let adjustedText = text;
+            // Текст
+            let adjustedText = text;
 
-    // Проверяем первое слово
-    const firstSpace = text.indexOf(' ');
-    const firstWord = firstSpace === -1 ? text : text.slice(0, firstSpace);
-    if (firstWord.length > 15) {
-        adjustedText = ' ' + text; // добавляем пробел перед текстом
-    }
+            // Проверяем первое слово
+            const firstSpace = text.indexOf(' ');
+            const firstWord = firstSpace === -1 ? text : text.slice(0, firstSpace);
+            if (firstWord.length > 15) {
+                adjustedText = ' ' + text; // добавляем пробел перед текстом
+            }
 
-    const textSpan = document.createElement('span');
-    textSpan.innerHTML = makeLinksClickable(adjustedText);
-    textSpan.style.verticalAlign = 'middle';
+            const textSpan = document.createElement('span');
+            textSpan.innerHTML = makeLinksClickable(adjustedText);
+            textSpan.style.verticalAlign = 'middle';
 
-    // Собираем
-    content.appendChild(avatar);
-    content.appendChild(nameSpan);
-    content.appendChild(textSpan);
+            // Собираем
+            content.appendChild(avatar);
+            content.appendChild(nameSpan);
+            content.appendChild(textSpan);
 
-    line.appendChild(content);
-    log.appendChild(line);
-    log.scrollTop = log.scrollHeight;
+            line.appendChild(content);
+            log.appendChild(line);
+            log.scrollTop = log.scrollHeight;
 
-    if (soundToggle.checked) {
-        soundChat.play().catch(e => console.error("Audio play failed:", e));
-    }
-}
+            if (soundToggle.checked) {
+                soundChat.play().catch(e => console.error("Audio play failed:", e));
+            }
+        }
 
 
 

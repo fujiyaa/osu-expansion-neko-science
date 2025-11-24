@@ -23,7 +23,7 @@
 3. Tampermonkey предложит установить скрипт.
 
 ## Обновление
-1. [Нажми здесь.](https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/osu-expansion-neko-science.user.js)
+1. [При проблемах с обновлением нажми здесь.](https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/osu-expansion-neko-science.user.js)
 2. Нажми "перезаписать", настройки расширения сохранятся.
 
 ## Проблемы
@@ -32,6 +32,10 @@
 - тех. поддержка (моральная): https://t.me/fujiyaosu 
 
 ## Апдейт лог
+
+0.3.7 -> 0.3.8:
+ - Настройка снега теперь действительно выключает снег
+ - Добавлены настройки для положения чата и другое
 
 0.3.4 -> 0.3.7:
  - Добавлена зимняя тема (отключается в настройках)
