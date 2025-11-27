@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu-expansion-neko-science
 // @namespace    https://github.com/fujiyaa/osu-expansion-neko-science
-// @version      0.3.8-beta
+// @version      0.4.0-beta
 // @description  Расширение для осу очень нужное
 // @author       Fujiya
 // @match        https://osu.ppy.sh/*
@@ -10,9 +10,9 @@
 // @updateURL    https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/inspector.user.js
 // ==/UserScript==
 
-// Что нового в 0.3.7 -> 0.3.8:
-// - Настройка снега теперь действительно выключает снег
-// - Добавлены настройки для положения чата и другое
+// Что нового в 0.3.8 -> 0.4.0:
+// - Индикатор онлайна
+// - Изменения сервера
 
 (function() {
     'use strict';
@@ -33,14 +33,13 @@
     let savedPos = JSON.parse(localStorage.getItem(POS_KEY) || 'null') ||
         { left: null, top: null, width: '20%', height: '40%' };
 
-
-
-    const WS_URL = 'wss://myangelfujiya.ru/neko-science/ws/chat';
+    const WS_URL = 'wss://myangelfujiya.ru/chat/ws';
+    //const WS_URL = 'ws://127.0.0.1:8000/chat/ws';
 
     let USERNAME = 'Guest' + Math.floor(100 + Math.random() * 900);
     const HEARTBEAT_INTERVAL = 25000;
     const BOX_ID = 'neko-chat-box';
-    const EXT_VERSION = '0.3.8-beta';
+    const EXT_VERSION = '0.4.0-beta';
     let latestVersion = EXT_VERSION;
 
     const AVATAR_URL_TG = "https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/server-avatar.png"
@@ -260,7 +259,7 @@
         });
 
         const header = document.createElement('div');
-        header.textContent = 'чат (neko-science)';
+        header.textContent = 'chat';
         Object.assign(header.style, {
             background: 'rgb(70,57,63)',
             color: '#fff',
@@ -270,6 +269,16 @@
             fontSize: '18px',
             flexShrink: 0
         });
+
+        const userCount = document.createElement('span');
+        Object.assign(userCount.style, {
+            marginLeft: '10px',
+            fontSize: '14px',
+            fontWeight: 'normal',
+            color: '#ccc'
+        });
+        userCount.textContent = '0 online';
+        header.appendChild(userCount);
 
         const log = document.createElement('div');
         log.id = 'log';
@@ -354,8 +363,8 @@
 </label>
 
 <label class="toggle-label">
-  Чтобы получить значок <strong>osu!</strong>, вставь в поле выше код, который появится после авторизации:
-  <a href="https://myangelfujiya.ru/neko-science/auth-start" target="_blank" style="color:#ff66aa; text-decoration:none; font-weight:500;">myangelfujiya.ru/neko-science/auth-start</a>
+  <strong>Авторизация:</strong>
+  <a href="https://myangelfujiya.ru/chat/auth" target="_blank" style="color:#ff66aa; text-decoration:none; font-weight:500;">myangelfujiya.ru/chat/auth</a>
 </label>
 
 <label class="toggle-label">
@@ -851,6 +860,7 @@
         ws.onmessage = function(e) {
             try {
                 const msg = JSON.parse(e.data);
+                console.log(msg)
                 if (msg.type === 'update_available') {
                     logMessage('Сервер', `⚠️ ${msg.message}`, AVATAR_URL_TG);
                     latestVersion = msg.latest_version;
@@ -868,9 +878,16 @@
                     return;
                 }
                 if (msg.type === 'heartbeat') return;
+                if (msg.type === 'error') {
+                    logMessage('Сервер', `⚠️ ${msg.message}`, AVATAR_URL_TG);
+                }
                 if (msg.type === 'message') {
                     logMessage(msg.username, msg.message, msg.avatar, msg.tooltip, msg.timestamp);
                 }
+                if (msg.total_users !== undefined) {
+                    userCount.textContent = `${msg.total_users} online`;
+                }
+
             } catch {
                 logMessage('System', e.data);
             }
