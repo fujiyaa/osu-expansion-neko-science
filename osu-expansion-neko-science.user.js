@@ -813,14 +813,45 @@
             avatar.addEventListener('mouseleave', () => { tooltip.style.opacity = '0'; });
 
             // Имя
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = username + ':';
-            Object.assign(nameSpan.style, {
-                fontWeight: 'bold',
-                color: getNickColor(username),
-                marginRight: '4px',
-                verticalAlign: 'middle'
-            });
+let nameNode;
+const isAuthorized =
+    avatarUrl &&
+    !avatarUrl.includes('guest-avatar') ||
+    (tooltipText && tooltipText.toLowerCase().includes('verified'));
+
+if (isAuthorized) {
+    const link = document.createElement('a');
+    link.href = `https://osu.ppy.sh/users/${encodeURIComponent(username)}`;
+    link.target = '_blank';
+    link.textContent = username + ':';
+
+    Object.assign(link.style, {
+        fontWeight: 'bold',
+        color: getNickColor(username),
+        marginRight: '4px',
+        verticalAlign: 'middle',
+        textDecoration: 'none',
+        cursor: 'pointer'
+    });
+
+    link.addEventListener('mouseenter', () => link.style.textDecoration = 'underline');
+    link.addEventListener('mouseleave', () => link.style.textDecoration = 'none');
+
+    nameNode = link;
+} else {
+    const span = document.createElement('span');
+    span.textContent = username + ':';
+
+    Object.assign(span.style, {
+        fontWeight: 'bold',
+        color: getNickColor(username),
+        marginRight: '4px',
+        verticalAlign: 'middle'
+    });
+
+    nameNode = span;
+}
+
 
             // Текст
             let adjustedText = text;
@@ -838,7 +869,7 @@
 
             // Собираем
             content.appendChild(avatar);
-            content.appendChild(nameSpan);
+            content.appendChild(nameNode);
             content.appendChild(textSpan);
 
             line.appendChild(content);
