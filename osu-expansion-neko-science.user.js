@@ -12,9 +12,9 @@
 
 // Что нового в 0.4.1 -> 0.4.2:
 // - Ссылка на профиль в нике (lironick)
-// - Потенциальный фикс размножения вебсокетов
-// - Нет загрузки истории заново при переходах
+// - Звук сообщений только когда новое сообщение!
 // - Больше интерфейса скейлится слайдером
+// - Потенциальный фикс размножения вебсокетов
 
 (function() {
     'use strict';
@@ -851,21 +851,52 @@
             avatar.addEventListener('mouseenter', () => { tooltip.textContent = tooltipText || username; tooltip.style.opacity = '1'; });
             avatar.addEventListener('mouseleave', () => { tooltip.style.opacity = '0'; });
 
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = username + ':';
-            Object.assign(nameSpan.style, {
-                fontWeight: 'bold',
-                color: getNickColor(username),
-                marginRight: '4px',
-                verticalAlign: 'middle'
-            });
+            let nameNode;
+            const isAuthorized =
+                avatarUrl &&
+                !avatarUrl.includes('guest-avatar') ||
+                (tooltipText && tooltipText.toLowerCase().includes('verified'));
+
+            if (isAuthorized && username !== "Сервер") {
+                const link = document.createElement('a');
+                link.href = `https://osu.ppy.sh/users/${encodeURIComponent(username)}`;
+                link.target = '_blank';
+                link.textContent = username + ' ';
+
+                Object.assign(link.style, {
+                    fontWeight: 'bold',
+                    color: getNickColor(username),
+                    marginRight: '4px',
+                    verticalAlign: 'middle',
+                    textDecoration: 'none',
+                    cursor: 'pointer'
+                });
+
+                link.addEventListener('mouseenter', () => link.style.textDecoration = 'underline');
+                link.addEventListener('mouseleave', () => link.style.textDecoration = 'none');
+
+                nameNode = link;
+            } else {
+                const span = document.createElement('span');
+                span.textContent = username + ':';
+
+                Object.assign(span.style, {
+                    fontWeight: 'bold',
+                    color: getNickColor(username),
+                    marginRight: '4px',
+                    verticalAlign: 'middle'
+                });
+
+                nameNode = span;
+            }
+
 
             let adjustedText = text;
 
             const firstSpace = text.indexOf(' ');
             const firstWord = firstSpace === -1 ? text : text.slice(0, firstSpace);
             if (firstWord.length > 15) {
-                adjustedText = ' ' + text; 
+                adjustedText = ' ' + text;
             }
 
             const textSpan = document.createElement('span');
@@ -873,7 +904,7 @@
             textSpan.style.verticalAlign = 'middle';
 
             content.appendChild(avatar);
-            content.appendChild(nameSpan);
+            content.appendChild(nameNode);
             content.appendChild(textSpan);
 
             line.appendChild(content);
