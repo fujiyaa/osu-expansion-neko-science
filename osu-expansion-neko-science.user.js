@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu-expansion-neko-science
 // @namespace    https://github.com/fujiyaa/osu-expansion-neko-science
-// @version      0.4.1-beta
+// @version      0.4.2-beta
 // @description  Расширение для осу очень нужное
 // @author       Fujiya
 // @match        https://osu.ppy.sh/*
@@ -10,14 +10,18 @@
 // @updateURL    https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/inspector.user.js
 // ==/UserScript==
 
-// Что нового в 0.4.0 -> 0.4.1:
-// - Часовой пояс должен работать правильно
+// Что нового в 0.4.1 -> 0.4.2:
+// - Ссылка на профиль в нике (lironick)
+// - Потенциальный фикс размножения вебсокетов
+// - Нет загрузки истории заново при переходах
+// - Больше интерфейса скейлится слайдером
 
 (function() {
     'use strict';
 
-    let RESET_ON_START = localStorage.getItem('chat_resetOnStart') === 'true'; // поменять на false на один запуск, если чат остался за пределами окна
+    const EXT_VERSION = '0.4.2-beta';
 
+    let RESET_ON_START = localStorage.getItem('chat_resetOnStart') === 'true'; // поменять на false на один запуск, если чат остался за пределами окна
 
     const PREFIX = 'neko-chat-box-';
     const STORAGE_ID_KEY = 'neko_chat_last_id';
@@ -32,22 +36,29 @@
     let savedPos = JSON.parse(localStorage.getItem(POS_KEY) || 'null') ||
         { left: null, top: null, width: '20%', height: '40%' };
 
-    const WS_URL = 'wss://myangelfujiya.ru/chat/ws';
-    //const WS_URL = 'ws://127.0.0.1:8000/chat/ws';
-
     let USERNAME = 'Guest' + Math.floor(100 + Math.random() * 900);
     const HEARTBEAT_INTERVAL = 25000;
     const BOX_ID = 'neko-chat-box';
-    const EXT_VERSION = '0.4.1-beta';
     let latestVersion = EXT_VERSION;
+    const WS_URL = 'wss://myangelfujiya.ru/chat/ws';
+    //const WS_URL = 'ws://127.0.0.1:8000/chat/ws'; dev server
 
-    const AVATAR_URL_TG = "https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/server-avatar.png"
+    let wsConnection = null;
+    const chatHistory = [];
+
+    let sendButton;
+    let input;
+    let log;
+    let lastMessageTime = null;
 
     let justifyText = false
     let snowEnabled = true;
 
+
+    const AVATAR_URL_SERVER = "https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/server-avatar.png"
     const soundChat = new Audio("https://fujiyaa.github.io/forum/extras/default_chat.mp3");
     soundChat.volume = 0.2;
+
 
     const nickColors = ['#e6194b','#3cb44b','#ffe119','#4363d8','#f58231','#911eb4','#46f0f0','#f032e6','#bcf60c','#fabebe'];
     const nickMap = {};
@@ -64,22 +75,17 @@
         return color;
     }
 
-
-
     function initChat() {
         let existingBox = document.querySelector('#' + BOX_ID);
         if (existingBox) return;
 
-
         (function() {
-            // Настройки
             const SNOWFLAKE_COUNT = 80;
             const SNOWFLAKE_MIN_SPEED = 0.3;
             const SNOWFLAKE_MAX_SPEED = 0.5;
             const SNOWFLAKE_RADIUS = 5.0;
             const ACCUMULATION_LIMIT = 20;
 
-            // Основной холст
             const canvas = document.createElement('canvas');
             canvas.id = 'snowCanvas';
             document.body.appendChild(canvas);
@@ -116,7 +122,6 @@
                     drift: 0
                 });
             }
-
 
             let mouseX = 0;
             let lastMouseX = 0;
@@ -206,7 +211,6 @@
 
             drawSnow();
 
-
         })();
 
         const elements = document.querySelectorAll('.osu-page--forum, .osu-page--forum-topic');
@@ -258,7 +262,8 @@
         });
 
         const header = document.createElement('div');
-        header.textContent = 'chat';
+        header.classList.add('chat-element-resize-ready');
+        header.textContent = 'chat ';
         Object.assign(header.style, {
             background: 'rgb(70,57,63)',
             color: '#fff',
@@ -270,6 +275,7 @@
         });
 
         const userCount = document.createElement('span');
+        userCount.classList.add('chat-element-resize-ready');
         Object.assign(userCount.style, {
             marginLeft: '10px',
             fontSize: '14px',
@@ -279,7 +285,7 @@
         userCount.textContent = '0 online';
         header.appendChild(userCount);
 
-        const log = document.createElement('div');
+        let log = document.createElement('div');
         log.id = 'log';
         Object.assign(log.style, {
             flex: 1,
@@ -485,10 +491,6 @@
             if (snowCanvas) snowCanvas.style.display = snowEnabled ? 'block' : 'none';
         });
 
-
-
-
-
         const soundToggle = settingsPanel.querySelector('#sound-toggle');
 
         const savedSound = localStorage.getItem('chat_sounds');
@@ -565,6 +567,14 @@
                 fontSlider.value = savedFontSize;
                 log.style.fontSize = savedFontSize + 'px';
                 input.style.fontSize = savedFontSize + 'px';
+                document.querySelectorAll('.chat-time').forEach(ts => {
+                    ts.style.fontSize = savedFontSize + 'px';
+                });
+                document.querySelectorAll('.chat-element-resize-ready').forEach(ts => {
+                    ts.style.fontSize = savedFontSize + 'px';
+                });
+
+                localStorage.setItem('chat_fontSize', fontSlider.value);
             }
         })();
 
@@ -612,6 +622,13 @@
         fontSlider.addEventListener('input', () => {
             log.style.fontSize = fontSlider.value + 'px';
             input.style.fontSize = fontSlider.value + 'px';
+            document.querySelectorAll('.chat-time').forEach(ts => {
+                ts.style.fontSize = fontSlider.value + 'px';
+            });
+            document.querySelectorAll('.chat-element-resize-ready').forEach(ts => {
+                ts.style.fontSize = fontSlider.value + 'px';
+            });
+
             localStorage.setItem('chat_fontSize', fontSlider.value);
         });
 
@@ -721,7 +738,6 @@
             return text.replace(urlRegex, url => {
                 const href = url.startsWith('http') ? url : 'https://' + url;
 
-                // YouTube
                 const ytMatch = href.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
                 if (ytMatch) {
                     const videoId = ytMatch[1];
@@ -732,22 +748,44 @@
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                         allowfullscreen
                         style="border-radius:6px; box-shadow:0 0 2px rgba(0,0,0,0.3); vertical-align:top;"></iframe><a href="${href}" target="_blank" rel="noopener noreferrer" style="font-size:0.85em; color:#66b3ff;">🔗</a>`;
-        }        
-        // Изображения
-        if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(href)) {
-            return `<img src="${href}"
+                }
+                if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(href)) {
+                    return `<img src="${href}"
                          style="max-width:auto; max-height:10em; border-radius:6px; box-shadow:0 0 2px rgba(0,0,0,0.3); vertical-align:top; cursor:default;"
                          loading="lazy"
                          onerror="this.style.display='none';"><a href="${href}" target="_blank" rel="noopener noreferrer" style="font-size:0.85em; color:#66b3ff;">🔗</a>`;
+                }
+                return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#66b3ff; text-decoration:underline;">${url}</a>`;
+            });
         }
 
-        // Ссылки
-        return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#66b3ff; text-decoration:underline;">${url}</a>`;
-    });
-}
+        function getLog() {
+            let currentLog = document.querySelector('#log');
+            if (!currentLog) {
+                currentLog = document.createElement('div');
+                currentLog.id = 'log';
+                Object.assign(currentLog.style, {
+                    flex: 1,
+                    padding: '8px',
+                    overflowY: 'auto',
+                    fontSize: '16px',
+                    color: '#fff',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                });
+                box.appendChild(currentLog);
+            }
+            log = currentLog;
+            return currentLog;
+        }
 
+        function logMessage(username, text, avatarUrl, tooltipText, timestamp = "", skipSound = false) {
 
-        function logMessage(username, text, avatarUrl, tooltipText, timestamp = "") {
+            chatHistory.push({ username, text, avatarUrl, tooltipText, timestamp });
+
+            const log = getLog();
+            const savedFontSize = localStorage.getItem('chat_fontSize');
+
             const line = document.createElement('div');
             line.classList.add('chat-message');
             Object.assign(line.style, {
@@ -758,7 +796,6 @@
                 whiteSpace: 'pre-wrap'
             });
 
-            // Контейнер для всего сообщения
             const content = document.createElement('span');
             Object.assign(content.style, {
                 display: 'inline-block',
@@ -768,36 +805,38 @@
                 wordSpacing: justifyText ? '0.2em' : 'normal'
             });
 
-            // Время (если передано)
+            let timeSpan = document.createElement('span');
+            timeSpan.classList.add('chat-time');
             if (timestamp) {
                 let ts = timestamp;
-
-                // Проверяем, указан ли часовой пояс (Z или +hh:mm)
                 const hasTimezone = /Z$|[+-]\d\d:\d\d$/.test(ts);
-
-                // Если таймзоны нет — считаем, что это UTC и добавляем Z
-                if (!hasTimezone) {
-                    ts += 'Z';
-                }
+                if (!hasTimezone) ts += 'Z';
 
                 const date = new Date(ts);
                 const hours = String(date.getHours()).padStart(2, '0');
                 const minutes = String(date.getMinutes()).padStart(2, '0');
+                const formattedTime = `${hours}:${minutes}`;
 
-                const timeSpan = document.createElement('span');
-                timeSpan.textContent = `${hours}:${minutes}`;
+                if (lastMessageTime === formattedTime) {
+                    timeSpan.innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
+                } else {
+                    timeSpan.textContent = formattedTime;
+                    lastMessageTime = formattedTime;
+                }
                 Object.assign(timeSpan.style, {
                     color: '#888',
-                    fontSize: '0.85em',
+                    fontSize: `${savedFontSize || 16}px`,
                     marginRight: '6px',
-                    verticalAlign: 'middle'
+                    verticalAlign: 'middle',
+                    display: 'inline-block',
+                    width: '5ch',
+                    fontFamily: 'monospace'
                 });
 
-                content.appendChild(timeSpan);
             }
 
+            content.appendChild(timeSpan);
 
-            // Аватар
             const avatar = document.createElement('img');
             avatar.src = avatarUrl || 'https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/guest-avatar.png';
             Object.assign(avatar.style, {
@@ -812,7 +851,6 @@
             avatar.addEventListener('mouseenter', () => { tooltip.textContent = tooltipText || username; tooltip.style.opacity = '1'; });
             avatar.addEventListener('mouseleave', () => { tooltip.style.opacity = '0'; });
 
-            // Имя
             const nameSpan = document.createElement('span');
             nameSpan.textContent = username + ':';
             Object.assign(nameSpan.style, {
@@ -822,21 +860,18 @@
                 verticalAlign: 'middle'
             });
 
-            // Текст
             let adjustedText = text;
 
-            // Проверяем первое слово
             const firstSpace = text.indexOf(' ');
             const firstWord = firstSpace === -1 ? text : text.slice(0, firstSpace);
             if (firstWord.length > 15) {
-                adjustedText = ' ' + text; // добавляем пробел перед текстом
+                adjustedText = ' ' + text; 
             }
 
             const textSpan = document.createElement('span');
             textSpan.innerHTML = makeLinksClickable(adjustedText);
             textSpan.style.verticalAlign = 'middle';
 
-            // Собираем
             content.appendChild(avatar);
             content.appendChild(nameSpan);
             content.appendChild(textSpan);
@@ -845,93 +880,181 @@
             log.appendChild(line);
             log.scrollTop = log.scrollHeight;
 
-            if (soundToggle.checked) {
+            if (!skipSound && soundToggle.checked) {
                 soundChat.play().catch(e => console.error("Audio play failed:", e));
             }
         }
 
+        function restoreChatHistory() {
+            if (!chatHistory.length) return;
+            log.innerHTML = '';
+            chatHistory.forEach(msg => {
+                logMessage(msg.username, msg.text, msg.avatarUrl, msg.tooltipText, msg.timestamp, true);
+            });
+        }
+
+        function createWebSocketConnection() {
+            if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+                console.log("reusing existing WebSocket");
+                restoreChatHistory();
+
+                setupInputSender(wsConnection);
+                setupSendButton();
+                return wsConnection;
+            }
+
+            const ws = new WebSocket(WS_URL);
+            const state = { heartbeat: null };
+
+            ws.onopen = () => handleOpen(ws, state);
+            ws.onclose = () => handleClose(state);
+            ws.onmessage = handleMessage;
+            ws.onerror = handleError;
 
 
+            wsConnection = ws;
+            return ws;
+        }
 
 
+        function handleOpen(ws, state) {
+            logMessage('Сервер','✅ Подключено', AVATAR_URL_SERVER);
 
+            ws.send(JSON.stringify({
+                type: 'auth',
+                username: USERNAME,
+                version: EXT_VERSION
+            }));
 
+            setupInputSender(ws);
+            setupSendButton();
 
-        const ws = new WebSocket(WS_URL);
-        let heartbeat;
-        ws.onopen = function(){
-            logMessage('Сервер','✅ Подключено', AVATAR_URL_TG);
-            ws.send(JSON.stringify({ type: 'auth', username: USERNAME, version: EXT_VERSION }));
-            heartbeat=setInterval(()=>{
-                if(ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({type:'heartbeat'}));
-            },HEARTBEAT_INTERVAL);
-        };
+            state.heartbeat = startHeartbeat(ws);
+        }
 
-        ws.onmessage = function(e) {
+        function handleMessage(e) {
             try {
                 const msg = JSON.parse(e.data);
+
                 console.log(msg)
-                if (msg.type === 'update_available') {
-                    logMessage('Сервер', `⚠️ ${msg.message}`, AVATAR_URL_TG);
-                    latestVersion = msg.latest_version;
-                    updatePanel.innerHTML = `
-        <div style="font-weight:bold; font-size:18px; margin-top:10px; margin-bottom:8px;">🔄 Обновление</div>
-        <div style="font-size:14px; margin-bottom:4px;">Текущая версия: ${EXT_VERSION}</div>
-        <div style="font-size:14px; margin-bottom:8px;">Доступна новая версия: ${latestVersion}</div>
-        <div style="font-weight:bold; font-size:18px; margin:0 0 16px 0;">
-          <a href="https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/osu-expansion-neko-science.user.js" target="_blank" style="color:#4ea1f3; text-decoration:underline;">Установить сейчас</a>
-        </div>
-        <div style="font-size:14px; margin-bottom:28px;">Подсказка: дождись загрузки страницы со скриптом, нажми "Перезаписать". После этого обнови текущую страницу.</div>
-      `;
-                    updateBtn.style.display = 'block';
-                    updateBtn.classList.add('pulse');
-                    return;
-                }
+
                 if (msg.type === 'heartbeat') return;
-                if (msg.type === 'error') {
-                    logMessage('Сервер', `⚠️ ${msg.message}`, AVATAR_URL_TG);
-                }
-                if (msg.type === 'message') {
-                    logMessage(msg.username, msg.message, msg.avatar, msg.tooltip, msg.timestamp);
-                }
                 if (msg.total_users !== undefined) {
                     userCount.textContent = `${msg.total_users} online`;
+                }
+                if (msg.type === 'online_refresh') {
+                    userCount.textContent = `${msg.total_users} online`;
+                    return;
+                }
+                if (msg.type === 'update_available') {
+                    return showUpdateMessage(msg);
+                }
+                if (msg.type === 'error') {
+                    return logMessage('Сервер', `⚠️ ${msg.message}`, AVATAR_URL_SERVER)
+                }
+                if (msg.type === 'history') {
+                    return logMessage(msg.username, msg.message, msg.avatar, msg.tooltip, msg.timestamp, true);
+                }
+                if (msg.type === 'message') {
+                    return logMessage(msg.username, msg.message, msg.avatar, msg.tooltip, msg.timestamp);
                 }
 
             } catch {
                 logMessage('System', e.data);
             }
-        };
-        ws.onclose = ()=>{ logMessage('Сервер','❌ Отключено', AVATAR_URL_TG); clearInterval(heartbeat); };
-        ws.onerror = ()=>{ logMessage('Сервер','⚠️ Нет связи', AVATAR_URL_TG); };
+        }
 
-        let cooldown=false;
-        input.addEventListener('keydown', e=>{
-            if(e.key==='Enter'){
-                if(cooldown || input.value.trim()==='') return e.preventDefault();
-                ws.send(JSON.stringify({type:'message',username:USERNAME,message:input.value.trim(),timestamp:new Date().toISOString()}));
-                input.value='';
-                cooldown=true;
-                input.style.transition='';
-                input.style.background='rgb(0,102,51)';
-                setTimeout(()=>{
-                    input.style.transition='background 0.5s';
-                    input.style.background='rgb(70,57,63)';
-                    cooldown=false;
-                },1000);
-            }
-        });
+        function showUpdateMessage(msg) {
+            logMessage('Сервер', `⚠️ ${msg.message}`, AVATAR_URL_SERVER);
+            latestVersion = msg.latest_version;
 
-        const sendButton=document.createElement('span');
-        sendButton.textContent='📨';
-        Object.assign(sendButton.style,{
-            fontSize:'32px', position:'absolute', right:'4px', bottom:'4px',
-            cursor:'pointer', zIndex:1000000, userSelect:'none'
-        });
-        box.appendChild(sendButton);
-        sendButton.addEventListener('click', ()=>{ input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'})); input.focus(); });
+            updatePanel.innerHTML = `
+        <div style="font-weight:bold; font-size:18px; margin-top:10px; margin-bottom:8px;">🔄 Обновление</div>
+        <div style="font-size:14px; margin-bottom:4px;">Текущая версия: ${EXT_VERSION}</div>
+        <div style="font-size:14px; margin-bottom:8px;">Доступна новая версия: ${latestVersion}</div>
+        <div style="font-weight:bold; font-size:18px; margin:0 0 16px 0;">
+            <a href="https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/osu-expansion-neko-science.user.js"
+               target="_blank"
+               style="color:#4ea1f3; text-decoration:underline;">Установить сейчас</a>
+        </div>
+        <div style="font-size:14px; margin-bottom:28px;">
+            Подсказка: дождись загрузки страницы со скриптом, нажми "Перезаписать". После этого обнови текущую страницу.
+        </div>
+    `;
+
+            updateBtn.style.display = 'block';
+            updateBtn.classList.add('pulse');
+        }
+
+        function startHeartbeat(ws) {
+            return setInterval(() => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'heartbeat' }));
+                }
+            }, HEARTBEAT_INTERVAL);
+        }
+
+        function handleClose(state) {
+            logMessage('Сервер','❌ Отключено', AVATAR_URL_SERVER);
+            clearInterval(state.heartbeat);
+            wsConnection = null;
+        }
+
+        function handleError() {
+            logMessage('Сервер','⚠️ Нет связи', AVATAR_URL_SERVER);
+        }
+
+        function setupInputSender(ws) {
+            if (!input) return;
+
+            let cooldown = false;
+            input.addEventListener('keydown', e => {
+                if (e.key !== 'Enter') return;
+                if (cooldown || input.value.trim() === '') return e.preventDefault();
+
+                ws.send(JSON.stringify({
+                    type: 'message',
+                    username: USERNAME,
+                    message: input.value.trim(),
+                    timestamp: new Date().toISOString()
+                }));
+
+                input.value = '';
+                cooldown = true;
+                input.style.transition = '';
+                input.style.background = 'rgb(0,102,51)';
+
+                setTimeout(() => {
+                    input.style.transition = 'background 0.5s';
+                    input.style.background = 'rgb(70,57,63)';
+                    cooldown = false;
+                }, 1000);
+            });
+        }
+
+        function setupSendButton() {
+            sendButton = document.createElement('span');
+            sendButton.textContent = '📨';
+            Object.assign(sendButton.style, {
+                fontSize: '32px',
+                position: 'absolute',
+                right: '4px',
+                bottom: '4px',
+                cursor: 'pointer',
+                zIndex: 1000000,
+                userSelect: 'none'
+            });
+
+            box.appendChild(sendButton);
+
+            sendButton.addEventListener('click', () => {
+                if (input) input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+                if (input) input.focus();
+            });
+        }
+
+        createWebSocketConnection();
     }
-
 
     function checkChatBox() {
         const expectedId = PREFIX + lastId;
@@ -949,10 +1072,8 @@
         }
     }
 
-    setInterval(checkChatBox, 500);
-
+    setInterval(checkChatBox, 250);
 
 })();
 
 // Подвал
-
