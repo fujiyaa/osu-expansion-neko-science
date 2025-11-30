@@ -50,6 +50,7 @@
     let input;
     let log;
     let lastMessageTime = null;
+    let lastUserCount = 0;
 
     let justifyText = false
     let snowEnabled = true;
@@ -263,6 +264,7 @@
 
         const header = document.createElement('div');
         header.classList.add('chat-element-resize-ready');
+        header.classList.add('chat-element-resize-ready');
         header.textContent = 'chat ';
         Object.assign(header.style, {
             background: 'rgb(70,57,63)',
@@ -274,15 +276,16 @@
             flexShrink: 0
         });
 
-        const userCount = document.createElement('span');
+        let userCount = document.createElement('span');
         userCount.classList.add('chat-element-resize-ready');
+        userCount.classList.add('chat-user-count');
         Object.assign(userCount.style, {
             marginLeft: '10px',
             fontSize: '14px',
             fontWeight: 'normal',
             color: '#ccc'
         });
-        userCount.textContent = '0 online';
+        userCount.textContent = `${lastUserCount} online`;
         header.appendChild(userCount);
 
         let log = document.createElement('div');
@@ -778,6 +781,24 @@
             log = currentLog;
             return currentLog;
         }
+        function getUserCount() {
+            let currentCount = document.querySelector('.chat-user-count');
+
+            if (!currentCount || !document.body.contains(currentCount)) {
+                currentCount = document.createElement('span');
+                currentCount.classList.add('chat-element-resize-ready', 'chat-user-count');
+                Object.assign(currentCount.style, {
+                    marginLeft: '10px',
+                    fontSize: '14px',
+                    fontWeight: 'normal',
+                    color: '#ccc'
+                });
+                currentCount.textContent = '0 online';
+                box.appendChild(currentCount);
+            }
+
+            return currentCount;
+        }
 
         function logMessage(username, text, avatarUrl, tooltipText, timestamp = "", skipSound = false) {
 
@@ -926,9 +947,9 @@
 
         function createWebSocketConnection() {
             if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
-                console.log("reusing existing WebSocket");
+                //console.log("reusing existing WebSocket");
+                getUserCount().textContent = `${lastUserCount} online`;
                 restoreChatHistory();
-
                 setupInputSender(wsConnection);
                 setupSendButton();
                 return wsConnection;
@@ -967,14 +988,15 @@
             try {
                 const msg = JSON.parse(e.data);
 
-                console.log(msg)
+                //console.log(msg)
 
                 if (msg.type === 'heartbeat') return;
                 if (msg.total_users !== undefined) {
-                    userCount.textContent = `${msg.total_users} online`;
+                    lastUserCount = msg.total_users
+                    getUserCount().textContent = `${msg.total_users} online`;
                 }
                 if (msg.type === 'online_refresh') {
-                    userCount.textContent = `${msg.total_users} online`;
+                    getUserCount().textContent = `${msg.total_users} online`;
                     return;
                 }
                 if (msg.type === 'update_available') {
