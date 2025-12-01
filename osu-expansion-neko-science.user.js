@@ -318,6 +318,37 @@
 
         box.append(header, log, input);
         document.body.appendChild(box);
+        // Overlay для увеличения изображений
+        const imageOverlay = document.createElement('div');
+        imageOverlay.id = 'neko-image-overlay';
+        Object.assign(imageOverlay.style, {
+            position: 'fixed',
+            inset: '0',
+            background: 'rgba(0,0,0,0.85)',
+            display: 'none',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: '10000001',
+            cursor: 'zoom-out'
+        });
+
+        const overlayImg = document.createElement('img');
+        Object.assign(overlayImg.style, {
+            maxWidth: '90vw',
+            maxHeight: '90vh',
+            borderRadius: '10px',
+            boxShadow: '0 0 20px rgba(0,0,0,0.6)',
+            objectFit: 'contain'
+        });
+
+        imageOverlay.appendChild(overlayImg);
+        document.body.appendChild(imageOverlay);
+
+        imageOverlay.addEventListener('click', () => {
+            imageOverlay.style.display = 'none';
+            overlayImg.src = '';
+        });
+
 
         const settingsBtn = document.createElement('span');
         settingsBtn.textContent = '⚙️';
@@ -741,26 +772,71 @@
             return text.replace(urlRegex, url => {
                 const href = url.startsWith('http') ? url : 'https://' + url;
 
+                const chatContainer = document.getElementById('chat-container');
+                const chatHeight = chatContainer ? chatContainer.clientHeight : 400;
+                const maxImgHeight = chatHeight * 0.5;
+
+                // YouTube видео
                 const ytMatch = href.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
                 if (ytMatch) {
                     const videoId = ytMatch[1];
                     const embedUrl = `https://www.youtube.com/embed/${videoId}`;
-                    return `<iframe width="288" height="162"
-                        src="${embedUrl}"
-                        frameborder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        allowfullscreen
-                        style="border-radius:6px; box-shadow:0 0 2px rgba(0,0,0,0.3); vertical-align:top;"></iframe><a href="${href}" target="_blank" rel="noopener noreferrer" style="font-size:0.85em; color:#66b3ff;">🔗</a>`;
+
+                    return `
+<div style="margin-top:0; display:flex; flex-direction:column; gap:2px;">
+    <iframe
+        src="${embedUrl}"
+        frameborder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowfullscreen
+        style="
+            width: 100%;
+            aspect-ratio: 16/9;
+            border-radius:6px;
+            box-shadow:0 0 2px rgba(0,0,0,0.3);
+            vertical-align:top;
+        "></iframe>
+    <div style="display:flex; flex-wrap:wrap; justify-content:flex-end;">
+        <a href="${href}" target="_blank" rel="noopener noreferrer"
+           style="font-size:0.85em; color:#66b3ff; margin:0;">🔗</a>
+    </div>
+</div>`;
                 }
+
+                // Изображения
                 if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(href)) {
-                    return `<img src="${href}"
-                         style="max-width:auto; max-height:10em; border-radius:6px; box-shadow:0 0 2px rgba(0,0,0,0.3); vertical-align:top; cursor:default;"
-                         loading="lazy"
-                         onerror="this.style.display='none';"><a href="${href}" target="_blank" rel="noopener noreferrer" style="font-size:0.85em; color:#66b3ff;">🔗</a>`;
+                    return `
+<div style="display:flex; flex-wrap:wrap; align-items:flex-start; gap:6px; padding-top:0;">
+    <img src="${href}"
+         loading="lazy"
+         class="neko-chat-img"
+         style="
+            width: auto;
+            height: auto;
+            max-width: 90%;
+            max-height: ${maxImgHeight}px;
+            border-radius:6px;
+            box-shadow:0 0 4px rgba(0,0,0,0.4);
+            cursor:zoom-in;
+            object-fit:contain;
+         "
+         onerror="this.style.display='none';"
+         onclick="
+            const overlay = document.getElementById('neko-image-overlay');
+            const overlayImg = overlay.querySelector('img');
+            overlayImg.src='${href}';
+            overlay.style.display='flex';
+         ">
+    <a href="${href}" target="_blank" rel="noopener noreferrer"
+       style="flex-shrink:0; color:#66b3ff; font-size:14px; text-decoration:none; white-space:nowrap; margin:0;">🔗</a>
+</div>`;
                 }
-                return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#66b3ff; text-decoration:underline;">${url}</a>`;
+
+                // Обычная ссылка или текст
+                return `<div style="margin-top:0;">${url.startsWith('http') ? `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#66b3ff; text-decoration:underline;">${url}</a>` : url}</div>`;
             });
         }
+
 
         function getLog() {
             let currentLog = document.querySelector('#log');
