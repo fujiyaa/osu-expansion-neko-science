@@ -767,22 +767,22 @@
         });
 
         function makeLinksClickable(text) {
-    const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/gi;
+            const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/gi;
 
-    return text.replace(urlRegex, url => {
-        const href = url.startsWith('http') ? url : 'https://' + url;
+            return text.replace(urlRegex, url => {
+                const href = url.startsWith('http') ? url : 'https://' + url;
 
-        const chatContainer = document.getElementById('chat-container');
-        const chatHeight = chatContainer ? chatContainer.clientHeight : 400;
-        const maxImgHeight = chatHeight * 0.5;
+                const chatContainer = document.getElementById('chat-container');
+                const chatHeight = chatContainer ? chatContainer.clientHeight : 400;
+                const maxImgHeight = chatHeight * 0.5;
 
-        // YouTube видео
-        const ytMatch = href.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
-        if (ytMatch) {
-            const videoId = ytMatch[1];
-            const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+                // YouTube видео
+                const ytMatch = href.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+                if (ytMatch) {
+                    const videoId = ytMatch[1];
+                    const embedUrl = `https://www.youtube.com/embed/${videoId}`;
 
-            return `
+                    return `
 <div style="margin-top:0; display:flex; flex-direction:column; gap:2px;">
     <iframe
         src="${embedUrl}"
@@ -801,11 +801,11 @@
            style="font-size:0.85em; color:#66b3ff; margin:0;">🔗</a>
     </div>
 </div>`;
-        }
+                }
 
-        // Изображения
-        if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(href)) {
-            return `
+                // Изображения
+                if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(href)) {
+                    return `
 <div style="display:flex; flex-wrap:wrap; align-items:flex-start; gap:6px; padding-top:0;">
     <img src="${href}"
          loading="lazy"
@@ -830,12 +830,12 @@
     <a href="${href}" target="_blank" rel="noopener noreferrer"
        style="flex-shrink:0; color:#66b3ff; font-size:14px; text-decoration:none; white-space:nowrap; margin:0;">🔗</a>
 </div>`;
-        }
+                }
 
-        // Обычная ссылка или текст
-        return `<div style="margin-top:0;">${url.startsWith('http') ? `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#66b3ff; text-decoration:underline;">${url}</a>` : url}</div>`;
-    });
-}
+                // Обычная ссылка или текст
+                return `<div style="margin-top:0;">${url.startsWith('http') ? `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#66b3ff; text-decoration:underline;">${url}</a>` : url}</div>`;
+            });
+        }
 
 
         function getLog() {
