@@ -32,6 +32,11 @@
 
 ## Апдейт лог
 
+0.4.2 -> 0.4.3:
+- Длинные картинки не ломают чат [@lironick](https://github.com/lironick) (PR [#2](https://github.com/fujiyaa/osu-expansion-neko-science/pull/2))
+- Загрузка быстрее (вероятно)
+- Потенциальный фикс отображения онлайна
+
 0.4.1 -> 0.4.2:
 - Ссылка на профиль в нике [@lironick](https://github.com/lironick) (PR [#1](https://github.com/fujiyaa/osu-expansion-neko-science/pull/1))
 - Звук сообщений только когда новое сообщение!

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu-expansion-neko-science
 // @namespace    https://github.com/fujiyaa/osu-expansion-neko-science
-// @version      0.4.2-beta
+// @version      0.4.3-beta
 // @description  Расширение для осу очень нужное
 // @author       Fujiya
 // @match        https://osu.ppy.sh/*
@@ -10,16 +10,15 @@
 // @updateURL    https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/inspector.user.js
 // ==/UserScript==
 
-// Что нового в 0.4.1 -> 0.4.2:
-// - Ссылка на профиль в нике (lironick)
-// - Звук сообщений только когда новое сообщение!
-// - Больше интерфейса скейлится слайдером
-// - Потенциальный фикс размножения вебсокетов
+// Что нового в 0.4.2 -> 0.4.3:
+// - Длинные картинки не ломают чат [@lironick](https://github.com/lironick) (PR [#2](https://github.com/fujiyaa/osu-expansion-neko-science/pull/2))
+// - Загрузка быстрее (вероятно)
+// - Потенциальный фикс отображения онлайна
 
 (function() {
     'use strict';
 
-    const EXT_VERSION = '0.4.2-beta';
+    const EXT_VERSION = '0.4.3-beta';
 
     let RESET_ON_START = localStorage.getItem('chat_resetOnStart') === 'true'; // поменять на false на один запуск, если чат остался за пределами окна
 
@@ -782,39 +781,30 @@
                     const videoId = ytMatch[1];
                     const embedUrl = `https://www.youtube.com/embed/${videoId}`;
 
-                    return `
-<div style="margin-top:0; display:flex; flex-direction:column; gap:2px;">
-    <iframe
-        src="${embedUrl}"
-        frameborder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        allowfullscreen
-        style="
-            width: 100%;
-            aspect-ratio: 16/9;
-            border-radius:6px;
-            box-shadow:0 0 2px rgba(0,0,0,0.3);
-            vertical-align:top;
-        "></iframe>
-    <div style="display:flex; flex-wrap:wrap; justify-content:flex-end;">
-        <a href="${href}" target="_blank" rel="noopener noreferrer"
-           style="font-size:0.85em; color:#66b3ff; margin:0;">🔗</a>
-    </div>
-</div>`;
+                    return `<iframe width="288" height="162"
+                        src="${embedUrl}"
+                        frameborder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowfullscreen
+                        style="border-radius:6px; box-shadow:0 0 2px rgba(0,0,0,0.3); vertical-align:top;"></iframe><a href="${href}" target="_blank" rel="noopener noreferrer" style="font-size:0.85em; color:#66b3ff;">🔗</a>`;
                 }
 
                 // Изображения
                 if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(href)) {
                     return `
 <div style="display:flex; flex-wrap:wrap; align-items:flex-start; gap:6px; padding-top:0;">
+    <!-- левый блок -->
+    <div style="width:5ch; flex-shrink:0;"></div>
+
+    <!-- картинка + ссылка -->
     <img src="${href}"
          loading="lazy"
          class="neko-chat-img"
          style="
-            width: auto;
-            height: auto;
-            max-width: 90%;
-            max-height: ${maxImgHeight}px;
+            width:auto;
+            height:auto;
+            max-width:90%;
+            max-height:${maxImgHeight}px;
             border-radius:6px;
             box-shadow:0 0 4px rgba(0,0,0,0.4);
             cursor:zoom-in;
@@ -904,6 +894,7 @@
 
             let timeSpan = document.createElement('span');
             timeSpan.classList.add('chat-time');
+
             if (timestamp) {
                 let ts = timestamp;
                 const hasTimezone = /Z$|[+-]\d\d:\d\d$/.test(ts);
@@ -914,14 +905,16 @@
                 const minutes = String(date.getMinutes()).padStart(2, '0');
                 const formattedTime = `${hours}:${minutes}`;
 
+                timeSpan.textContent = formattedTime;
+
                 if (lastMessageTime === formattedTime) {
-                    timeSpan.innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
+                    timeSpan.style.color = '#414141ff'; 
                 } else {
-                    timeSpan.textContent = formattedTime;
+                    timeSpan.style.color = '#d0d0d0ff';
                     lastMessageTime = formattedTime;
                 }
+
                 Object.assign(timeSpan.style, {
-                    color: '#888',
                     fontSize: `${savedFontSize || 16}px`,
                     marginRight: '6px',
                     verticalAlign: 'middle',
@@ -929,10 +922,10 @@
                     width: '5ch',
                     fontFamily: 'monospace'
                 });
-
             }
 
             content.appendChild(timeSpan);
+
 
             const avatar = document.createElement('img');
             avatar.src = avatarUrl || 'https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/guest-avatar.png';
@@ -1064,7 +1057,7 @@
             try {
                 const msg = JSON.parse(e.data);
 
-                //console.log(msg)
+                console.log(msg)
 
                 if (msg.type === 'heartbeat') return;
                 if (msg.total_users !== undefined) {
@@ -1083,6 +1076,11 @@
                 }
                 if (msg.type === 'history') {
                     return logMessage(msg.username, msg.message, msg.avatar, msg.tooltip, msg.timestamp, true);
+                }
+                if (msg.type === 'history_bulk') {
+                    msg.messages.forEach(m => {
+                        logMessage(m.username, m.message, m.avatar, m.tooltip, m.timestamp, true);
+                    });
                 }
                 if (msg.type === 'message') {
                     return logMessage(msg.username, msg.message, msg.avatar, msg.tooltip, msg.timestamp);
