@@ -32,6 +32,9 @@
 
 ## Апдейт лог
 
+0.4.3 -> 0.4.4:
+- Сайт теперь не должен зависать из-за расширения
+
 0.4.2 -> 0.4.3:
 - Длинные картинки не ломают чат [@lironick](https://github.com/lironick) (PR [#2](https://github.com/fujiyaa/osu-expansion-neko-science/pull/2))
 - Загрузка быстрее (вероятно)

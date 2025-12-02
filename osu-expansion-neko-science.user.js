@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu-expansion-neko-science
 // @namespace    https://github.com/fujiyaa/osu-expansion-neko-science
-// @version      0.4.3-beta
+// @version      0.4.4-beta
 // @description  Расширение для осу очень нужное
 // @author       Fujiya
 // @match        https://osu.ppy.sh/*
@@ -10,15 +10,13 @@
 // @updateURL    https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/inspector.user.js
 // ==/UserScript==
 
-// Что нового в 0.4.2 -> 0.4.3:
-// - Длинные картинки не ломают чат [@lironick](https://github.com/lironick) (PR [#2](https://github.com/fujiyaa/osu-expansion-neko-science/pull/2))
-// - Загрузка быстрее (вероятно)
-// - Потенциальный фикс отображения онлайна
+// Что нового в 0.4.3 -> 0.4.4:
+// - Фикс зависания сайта из-за расширения
 
 (function() {
     'use strict';
 
-    const EXT_VERSION = '0.4.3-beta';
+    const EXT_VERSION = '0.4.4-beta';
 
     let RESET_ON_START = localStorage.getItem('chat_resetOnStart') === 'true'; // поменять на false на один запуск, если чат остался за пределами окна
 
@@ -866,9 +864,11 @@
             return currentCount;
         }
 
-        function logMessage(username, text, avatarUrl, tooltipText, timestamp = "", skipSound = false) {
+        function logMessage(username, text, avatarUrl, tooltipText, timestamp = "", skipSound = false, restoring = false) {
 
-            chatHistory.push({ username, text, avatarUrl, tooltipText, timestamp });
+            if (!restoring){
+                chatHistory.push({ username, text, avatarUrl, tooltipText, timestamp });
+            }
 
             const log = getLog();
             const savedFontSize = localStorage.getItem('chat_fontSize');
@@ -980,7 +980,6 @@
                 nameNode = span;
             }
 
-
             let adjustedText = text;
 
             const firstSpace = text.indexOf(' ');
@@ -1004,13 +1003,21 @@
             if (!skipSound && soundToggle.checked) {
                 soundChat.play().catch(e => console.error("Audio play failed:", e));
             }
+
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    log.scrollTop = log.scrollHeight;
+                });
+            });
         }
 
         function restoreChatHistory() {
+            const log = getLog();
+
             if (!chatHistory.length) return;
             log.innerHTML = '';
             chatHistory.forEach(msg => {
-                logMessage(msg.username, msg.text, msg.avatarUrl, msg.tooltipText, msg.timestamp, true);
+                logMessage(msg.username, msg.text, msg.avatarUrl, msg.tooltipText, msg.timestamp, true, true);
             });
         }
 
@@ -1073,9 +1080,6 @@
                 }
                 if (msg.type === 'error') {
                     return logMessage('Сервер', `⚠️ ${msg.message}`, AVATAR_URL_SERVER)
-                }
-                if (msg.type === 'history') {
-                    return logMessage(msg.username, msg.message, msg.avatar, msg.tooltip, msg.timestamp, true);
                 }
                 if (msg.type === 'history_bulk') {
                     msg.messages.forEach(m => {
