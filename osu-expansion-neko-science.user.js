@@ -117,7 +117,8 @@
                     y: Math.random() * h,
                     speed: speed,
                     radius: SNOWFLAKE_RADIUS * (speed / SNOWFLAKE_MAX_SPEED),
-                    drift: 0
+                    drift: 0,
+                    time: Math.random() * 100
                 });
             }
 
@@ -155,11 +156,16 @@
                 snowCtx.fill();
             }
 
-            function drawSnow() {
+            let lastTimestamp = performance.now();
+
+            function drawSnow(timestamp) {
                 if (!snowEnabled) {
                     requestAnimationFrame(drawSnow);
                     return;
                 }
+
+                let deltaTime = (timestamp - lastTimestamp) / 1000;
+                lastTimestamp = timestamp;
 
                 ctx.clearRect(0, 0, w, h);
 
@@ -179,7 +185,10 @@
                     let speedFactor = minSpeedFactor + (1 - minSpeedFactor) * Math.exp(-3 * normalizedY);
                     let vy = flake.speed * speedFactor;
 
-                    flake.x += flake.drift;
+                    flake.time += deltaTime;
+                    let flakeDeltaX = Math.sin(flake.time) + Math.sin(flake.time * 2);
+
+                    flake.x += flakeDeltaX * 0.2;
                     flake.y += vy;
 
                     if (flake.x < 0) flake.x += w;
@@ -207,7 +216,7 @@
                 requestAnimationFrame(drawSnow);
             }
 
-            drawSnow();
+            requestAnimationFrame(drawSnow);
 
         })();
 
