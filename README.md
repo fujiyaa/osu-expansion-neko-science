@@ -32,6 +32,9 @@
 
 ## Апдейт лог
 
+0.4.4 -> 0.4.5:
+- Улучшения снега от [@G1RL4NDA](https://github.com/G1RL4NDA) (PR [#4](https://github.com/fujiyaa/osu-expansion-neko-science/pull/4))
+
 0.4.3 -> 0.4.4:
 - Сайт теперь не должен зависать из-за расширения
 
