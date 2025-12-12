@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu-expansion-neko-science
 // @namespace    https://github.com/fujiyaa/osu-expansion-neko-science
-// @version      0.4.4-beta
+// @version      0.4.5-beta
 // @description  Расширение для осу очень нужное
 // @author       Fujiya
 // @match        https://osu.ppy.sh/*
@@ -10,13 +10,13 @@
 // @updateURL    https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/inspector.user.js
 // ==/UserScript==
 
-// Что нового в 0.4.3 -> 0.4.4:
-// - Фикс зависания сайта из-за расширения
+// Что нового в 0.4.4 -> 0.4.5:
+// - Оптимизация снега от G1RL4NDA
 
 (function() {
     'use strict';
 
-    const EXT_VERSION = '0.4.4-beta';
+    const EXT_VERSION = '0.4.5-beta';
 
     let RESET_ON_START = localStorage.getItem('chat_resetOnStart') === 'true'; // поменять на false на один запуск, если чат остался за пределами окна
 
@@ -917,7 +917,7 @@
                 timeSpan.textContent = formattedTime;
 
                 if (lastMessageTime === formattedTime) {
-                    timeSpan.style.color = '#414141ff'; 
+                    timeSpan.style.color = '#414141ff';
                 } else {
                     timeSpan.style.color = '#d0d0d0ff';
                     lastMessageTime = formattedTime;
@@ -1032,7 +1032,6 @@
 
         function createWebSocketConnection() {
             if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
-                //console.log("reusing existing WebSocket");
                 getUserCount().textContent = `${lastUserCount} online`;
                 restoreChatHistory();
                 setupInputSender(wsConnection);
@@ -1055,7 +1054,7 @@
 
 
         function handleOpen(ws, state) {
-            logMessage('Сервер','✅ Подключено', AVATAR_URL_SERVER);
+            logMessage('Сервер', '✅ Подключено', AVATAR_URL_SERVER, true);
 
             ws.send(JSON.stringify({
                 type: 'auth',
@@ -1088,7 +1087,7 @@
                     return showUpdateMessage(msg);
                 }
                 if (msg.type === 'error') {
-                    return logMessage('Сервер', `⚠️ ${msg.message}`, AVATAR_URL_SERVER)
+                    return logMessage('Сервер', `⚠️ ${msg.message}`, AVATAR_URL_SERVER, true)
                 }
                 if (msg.type === 'history_bulk') {
                     msg.messages.forEach(m => {
@@ -1100,12 +1099,12 @@
                 }
 
             } catch {
-                logMessage('System', e.data);
+                logMessage('System', e.data, true);
             }
         }
 
         function showUpdateMessage(msg) {
-            logMessage('Сервер', `⚠️ ${msg.message}`, AVATAR_URL_SERVER);
+            logMessage('Сервер', `⚠️ ${msg.message}`, AVATAR_URL_SERVER, true);
             latestVersion = msg.latest_version;
 
             updatePanel.innerHTML = `
@@ -1141,7 +1140,7 @@
         }
 
         function handleError() {
-            logMessage('Сервер','⚠️ Нет связи', AVATAR_URL_SERVER);
+            logMessage('Сервер','⚠️ Нет связи', AVATAR_URL_SERVER, true);
         }
 
         function setupInputSender(ws) {
