@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu-expansion-neko-science
 // @namespace    https://github.com/fujiyaa/osu-expansion-neko-science
-// @version      0.4.6-beta
+// @version      0.4.7-beta
 // @description  Расширение для осу очень нужное
 // @author       Fujiya
 // @match        https://osu.ppy.sh/*
@@ -10,14 +10,15 @@
 // @updateURL    https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/inspector.user.js
 // ==/UserScript==
 
-// Что нового в 0.4.5 -> 0.4.6:
-// - Звук сообщений исправлен и не играется рандомно!
-// - Оптимизация снега, теперь ресурсы не тратятся когда вкладка не активна
+// Что нового в 0.4.6 -> 0.4.7:
+// - Раздел настроек обновлен
+// - Звук сообщений исправлен (0.4.6) + кнопка теста звука
+// - Оптимизация снега (0.4.6) + тоггл снега снова работает
 
 (function() {
     'use strict';
 
-    const EXT_VERSION = '0.4.6-beta';
+    const EXT_VERSION = '0.4.7-beta';
 
     let RESET_ON_START = localStorage.getItem('chat_resetOnStart') === 'true'; // поменять на false на один запуск, если чат остался за пределами окна
 
@@ -51,12 +52,11 @@
     let lastUserCount = 0;
 
     let justifyText = false
-    let snowEnabled = true;
-
+    let snowEnabled = localStorage.getItem('chat_snow') || true;
 
     const AVATAR_URL_SERVER = "https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/server-avatar.png"
     const soundChat = new Audio("https://fujiyaa.github.io/forum/extras/default_chat.mp3");
-    soundChat.volume = 0.2;
+    soundChat.volume = 0.1;
 
 
     const nickColors = ['#e6194b','#3cb44b','#ffe119','#4363d8','#f58231','#911eb4','#46f0f0','#f032e6','#bcf60c','#fabebe'];
@@ -80,35 +80,36 @@
 
 
         (function() {
-            const SNOWFLAKE_COUNT = 80;
-            const SNOWFLAKE_MAX_SPEED = 0.003;
-            const SNOWFLAKE_MIN_SPEED = 0.002;
-            const SNOWFLAKE_SIZE_MAX = 12;
-            const SNOWFLAKE_SIZE_MIN = 2;
-            const DRIFT_AMOUNT = 0.0005;
-            const SPEED_FALLOFF = 0.7;
-            const DRIFT_FALLOFF = 1.0;
+            if (snowEnabled) {
+                const SNOWFLAKE_COUNT = 80;
+                const SNOWFLAKE_MAX_SPEED = 0.003;
+                const SNOWFLAKE_MIN_SPEED = 0.002;
+                const SNOWFLAKE_SIZE_MAX = 12;
+                const SNOWFLAKE_SIZE_MIN = 2;
+                const DRIFT_AMOUNT = 0.0005;
+                const SPEED_FALLOFF = 0.7;
+                const DRIFT_FALLOFF = 1.0;
 
-            const canvas = document.createElement('canvas');
-            canvas.id = 'snowGL';
-            document.body.appendChild(canvas);
-            Object.assign(canvas.style, {
-                position: 'fixed',
-                top: '0',
-                left: '0',
-                width: '100%',
-                height: '100%',
-                pointerEvents: 'none',
-                zIndex: '0'
-            });
+                const canvas = document.createElement('canvas');
+                canvas.id = 'snowGL';
+                document.body.appendChild(canvas);
+                Object.assign(canvas.style, {
+                    position: 'fixed',
+                    top: '0',
+                    left: '0',
+                    width: '100%',
+                    height: '100%',
+                    pointerEvents: 'none',
+                    zIndex: '0'
+                });
 
-            const gl = canvas.getContext('webgl');
-            if (!gl) return console.error('WebGL');
+                const gl = canvas.getContext('webgl');
+                if (!gl) return console.error('WebGL');
 
-            let w = canvas.width = window.innerWidth;
-            let h = canvas.height = window.innerHeight;
+                let w = canvas.width = window.innerWidth;
+                let h = canvas.height = window.innerHeight;
 
-            const vertexShaderSource = `
+                const vertexShaderSource = `
         attribute vec2 a_position;
         attribute float a_pointSize;
         void main() {
@@ -117,157 +118,149 @@
         }
     `;
 
-    const fragmentShaderSource = `
+                const fragmentShaderSource = `
         precision mediump float;
         void main() {
-            vec2 coord = gl_PointCoord * 2.0 - 1.0; // нормализуем в [-1,1]
+            vec2 coord = gl_PointCoord * 2.0 - 1.0;
             float dist = dot(coord, coord);
             if (dist > 1.0) discard;
             gl_FragColor = vec4(1.0, 1.0, 1.0, 0.8);
         }
     `;
 
-    function createShader(type, source) {
-        const shader = gl.createShader(type);
-        gl.shaderSource(shader, source);
-        gl.compileShader(shader);
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(shader));
-        }
-        return shader;
-    }
+                function createShader(type, source) {
+                    const shader = gl.createShader(type);
+                    gl.shaderSource(shader, source);
+                    gl.compileShader(shader);
+                    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                        console.error(gl.getShaderInfoLog(shader));
+                    }
+                    return shader;
+                }
 
-    const vertexShader = createShader(gl.VERTEX_SHADER, vertexShaderSource);
-    const fragmentShader = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+                const vertexShader = createShader(gl.VERTEX_SHADER, vertexShaderSource);
+                const fragmentShader = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
 
-    const program = gl.createProgram();
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
-    gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        console.error(gl.getProgramInfoLog(program));
-    }
-    gl.useProgram(program);
+                const program = gl.createProgram();
+                gl.attachShader(program, vertexShader);
+                gl.attachShader(program, fragmentShader);
+                gl.linkProgram(program);
+                if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                    console.error(gl.getProgramInfoLog(program));
+                }
+                gl.useProgram(program);
 
-    const positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    const aPosition = gl.getAttribLocation(program, 'a_position');
-    gl.enableVertexAttribArray(aPosition);
-    gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
+                const positionBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+                const aPosition = gl.getAttribLocation(program, 'a_position');
+                gl.enableVertexAttribArray(aPosition);
+                gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
 
-    const pointSizeBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, pointSizeBuffer);
-    const aPointSize = gl.getAttribLocation(program, 'a_pointSize');
-    gl.enableVertexAttribArray(aPointSize);
-    gl.vertexAttribPointer(aPointSize, 1, gl.FLOAT, false, 0, 0);
+                const pointSizeBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, pointSizeBuffer);
+                const aPointSize = gl.getAttribLocation(program, 'a_pointSize');
+                gl.enableVertexAttribArray(aPointSize);
+                gl.vertexAttribPointer(aPointSize, 1, gl.FLOAT, false, 0, 0);
 
-    // Генерация снежинок
-    let snowflakes = [];
-    for (let i = 0; i < SNOWFLAKE_COUNT; i++) {
-        const size = SNOWFLAKE_SIZE_MIN + Math.random() * (SNOWFLAKE_SIZE_MAX - SNOWFLAKE_SIZE_MIN);
+                let snowflakes = [];
+                for (let i = 0; i < SNOWFLAKE_COUNT; i++) {
+                    const size = SNOWFLAKE_SIZE_MIN + Math.random() * (SNOWFLAKE_SIZE_MAX - SNOWFLAKE_SIZE_MIN);
 
-        // Скорость пропорциональна размеру
-        const speed = SNOWFLAKE_MIN_SPEED + (size - SNOWFLAKE_SIZE_MIN) / (SNOWFLAKE_SIZE_MAX - SNOWFLAKE_SIZE_MIN) * (SNOWFLAKE_MAX_SPEED - SNOWFLAKE_MIN_SPEED);
+                    const speed = SNOWFLAKE_MIN_SPEED + (size - SNOWFLAKE_SIZE_MIN) / (SNOWFLAKE_SIZE_MAX - SNOWFLAKE_SIZE_MIN) * (SNOWFLAKE_MAX_SPEED - SNOWFLAKE_MIN_SPEED);
 
-        const driftDirection = Math.random() < 0.5 ? -1 : 1;
-        const driftStrength = 0.7 + Math.random() * 0.3;
+                    const driftDirection = Math.random() < 0.5 ? -1 : 1;
+                    const driftStrength = 0.7 + Math.random() * 0.3;
 
-        snowflakes.push({
-            x: Math.random() * 2 - 1,
-            y: Math.random() * 4 - 1,
-            size,
-            speed,
-            driftDirection,
-            driftStrength
-        });
-    }
+                    snowflakes.push({
+                        x: Math.random() * 2 - 1,
+                        y: Math.random() * 4 - 1,
+                        size,
+                        speed,
+                        driftDirection,
+                        driftStrength
+                    });
+                }
 
-    const positions = new Float32Array(SNOWFLAKE_COUNT * 2);
-    const sizes = new Float32Array(SNOWFLAKE_COUNT);
+                const positions = new Float32Array(SNOWFLAKE_COUNT * 2);
+                const sizes = new Float32Array(SNOWFLAKE_COUNT);
 
-    snowflakes.forEach((f, i) => {
-        positions[i * 2] = f.x;
-        positions[i * 2 + 1] = f.y;
-        sizes[i] = f.size;
-    });
+                snowflakes.forEach((f, i) => {
+                    positions[i * 2] = f.x;
+                    positions[i * 2 + 1] = f.y;
+                    sizes[i] = f.size;
+                });
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, pointSizeBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, sizes, gl.DYNAMIC_DRAW);
+
+                function resize() {
+                    w = canvas.width = window.innerWidth;
+                    h = canvas.height = window.innerHeight;
+                    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+                }
+                window.addEventListener('resize', resize);
+
+                const SIN_STEPS = 16;
+                const sinTable = new Float32Array(SIN_STEPS);
+                for (let i = 0; i < SIN_STEPS; i++) {
+                    sinTable[i] = Math.sin((i / (SIN_STEPS - 1)) * (Math.PI / 2));
+                }
+
+                function sinApprox(value) {
+                    const idx = Math.floor(value * (SIN_STEPS - 1));
+                    return sinTable[idx];
+                }
+
+                let lastTime = 0;
+                const targetFPS = 60;
+                const frameDuration = 1000 / targetFPS;
+
+                function draw(timestamp) {
+                    if (timestamp - lastTime < frameDuration) {
+                        requestAnimationFrame(draw);
+                        return;
+                    }
+                    lastTime = timestamp;
+
+                    gl.clear(gl.COLOR_BUFFER_BIT);
+
+                    snowflakes.forEach((f, i) => {
+                        let normalizedY = (1 - (f.y + 1) / 2);
+                        let speedFactor = Math.max(1 - SPEED_FALLOFF * normalizedY, 0.1);
+                        f.y -= f.speed * speedFactor;
+
+                        let driftFactor = (1 - normalizedY) * (1 - DRIFT_FALLOFF) + DRIFT_FALLOFF;
+                        f.x += sinApprox(1 - normalizedY) * DRIFT_AMOUNT * driftFactor * f.driftStrength * f.driftDirection;
+
+                        if (f.x < -1) f.x += 2;
+                        else if (f.x > 1) f.x -= 2;
+
+                        if (f.y < -1) {
+                            f.y = 1;
+                            f.x = Math.random() * 2 - 1;
+                        }
+
+                        positions[i * 2] = f.x;
+                        positions[i * 2 + 1] = f.y;
+                    });
+
+                    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+                    gl.bufferSubData(gl.ARRAY_BUFFER, 0, positions);
+
+                    gl.drawArrays(gl.POINTS, 0, SNOWFLAKE_COUNT);
+
+                    requestAnimationFrame(draw);
+                }
 
 
-    // Выделяем буферы один раз
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, pointSizeBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, sizes, gl.DYNAMIC_DRAW);
-
-    function resize() {
-        w = canvas.width = window.innerWidth;
-        h = canvas.height = window.innerHeight;
-        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    }
-    window.addEventListener('resize', resize);
-
-    // LUT для синуса (16 шагов, можно увеличить)
-    const SIN_STEPS = 16;
-    const sinTable = new Float32Array(SIN_STEPS);
-    for (let i = 0; i < SIN_STEPS; i++) {
-        sinTable[i] = Math.sin((i / (SIN_STEPS - 1)) * (Math.PI / 2));
-    }
-
-    function sinApprox(value) {
-        // value = 0..1
-        const idx = Math.floor(value * (SIN_STEPS - 1));
-        return sinTable[idx];
-    }
-
-    let lastTime = 0;
-    const targetFPS = 60;
-    const frameDuration = 1000 / targetFPS;
-
-    function draw(timestamp) {
-        if (timestamp - lastTime < frameDuration) {
-            requestAnimationFrame(draw);
-            return;
-        }
-        lastTime = timestamp;
-
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
-        snowflakes.forEach((f, i) => {
-            let normalizedY = (1 - (f.y + 1) / 2);
-            let speedFactor = Math.max(1 - SPEED_FALLOFF * normalizedY, 0.1);
-            f.y -= f.speed * speedFactor;
-
-            let driftFactor = (1 - normalizedY) * (1 - DRIFT_FALLOFF) + DRIFT_FALLOFF;
-            f.x += sinApprox(1 - normalizedY) * DRIFT_AMOUNT * driftFactor * f.driftStrength * f.driftDirection;
-
-            if (f.x < -1) f.x += 2;
-            else if (f.x > 1) f.x -= 2;
-
-            if (f.y < -1) {
-                f.y = 1;
-                f.x = Math.random() * 2 - 1;
+                gl.clearColor(0, 0, 0, 0);
+                gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+                draw();
             }
-
-            positions[i * 2] = f.x;
-            positions[i * 2 + 1] = f.y;
-        });
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        gl.bufferSubData(gl.ARRAY_BUFFER, 0, positions);
-
-        gl.drawArrays(gl.POINTS, 0, SNOWFLAKE_COUNT);
-
-        requestAnimationFrame(draw);
-    }
-
-
-    gl.clearColor(0, 0, 0, 0);
-    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    draw();
-})();
-
-
-
+        })();
 
         const elements = document.querySelectorAll('.osu-page--forum, .osu-page--forum-topic');
 
@@ -373,7 +366,7 @@
 
         box.append(header, log, input);
         document.body.appendChild(box);
-        // Overlay для увеличения изображений
+
         const imageOverlay = document.createElement('div');
         imageOverlay.id = 'neko-image-overlay';
         Object.assign(imageOverlay.style, {
@@ -436,64 +429,95 @@
             flexShrink: 0,
             borderTop: '1px solid rgba(255,255,255,0.1)'
         });
-        settingsPanel.innerHTML = `
-        <style>
-        .toggle-label {
-  display: block;
-  margin-bottom: 10px; /* одинаковый отступ */
-  cursor: pointer;
-  line-height: 1.4;
-}
-.toggle-label input[type="checkbox"] {
-  margin-right: 6px;
-}
+settingsPanel.innerHTML = `
+<style>
+  .settings-container {
+    font-family: sans-serif;
+    padding: 15px;
+    background: #transparent;
+    color: #fff;
+    border-radius: 8px;
+    width: 100%;
+  }
+
+  .settings-container h2 {
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+
+  .toggle-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+    line-height: 1.4;
+    font-size: 18px;
+    font-weight: 10;
+  }
+
+  .toggle-label input[type="text"],
+  .toggle-label input[type="range"] {
+    flex: 1;
+    margin-left: 10px;
+  }
+
+  .toggle-label input[type="checkbox"] {
+    margin-left: 0;
+    transform: scale(1.1);
+  }
+
+  .section-title {
+    margin-top: 15px;
+    font-weight: bold;
+    font-size: 16px;
+    border-bottom: 1px solid #555;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+  }
+
 </style>
 
-     <div style="font-weight:bold; font-size:18px; margin-top:10px; margin-bottom:8px;">Настройки</div>
+<div class="settings-container">
+  <div class="section-title">Авторизация</div>
+  <label class="toggle-label">
+    Нeконейм:
+    <input type="text" id="nick-input" placeholder="${USERNAME}">
+  </label>
+  <label class="toggle-label">
+    <a href="https://myangelfujiya.ru/chat/auth" target="_blank">myangelfujiya.ru/chat/auth</a>
 
-<label class="toggle-label">
-  Нeконейм:
-  <input type="text" id="nick-input" placeholder="${USERNAME}" style="margin-left:8px; padding:4px; font-size:14px; width:180px; border-radius:1px; border:none;">
-</label>
+  </label>
 
-<label class="toggle-label">
-  <strong>Авторизация:</strong>
-  <a href="https://myangelfujiya.ru/chat/auth" target="_blank" style="color:#ff66aa; text-decoration:none; font-weight:500;">myangelfujiya.ru/chat/auth</a>
-</label>
+  <div class="section-title">Звуки и тема</div>
+  <label class="toggle-label">
+    Включить звуки
+    <input type="checkbox" id="sound-toggle">
+  </label>
+  <label class="toggle-label">
+    Светлая тема
+    <input type="checkbox" id="theme-toggle">
+  </label>
+  <label class="toggle-label">
+    Шрифт
+    <input type="range" id="font-size-slider" min="12" max="32" value="18">
+  </label>
 
-<label class="toggle-label">
-  <input type="checkbox" id="sound-toggle">
-  Включить звуки
-</label>
+  <div class="section-title">Эффекты (нужно обоновить страницу)</div>
+  <label class="toggle-label">
+    Снег
+    <input type="checkbox" id="snow-toggle">
+  </label>
+  <label class="toggle-label">
+    Выравнивание текста по ширине
+    <input type="checkbox" id="justify-text-toggle">
+  </label>
+  <label class="toggle-label">
+    Сброс положения
+    <input type="checkbox" id="reset-on-start-toggle">
+  </label>
+</div>
+`;
 
-<label class="toggle-label">
-  <input type="checkbox" id="theme-toggle">
-  Светлая тема
-</label>
-
-<label class="toggle-label">
-  <input type="checkbox" id="snow-toggle">
-  Снег
-</label>
-
-<label class="toggle-label">
-  <input type="checkbox" id="reset-on-start-toggle">
-  Сброс положения - если выключено, всегда сохраняет положение и размер, но может оставить чат за пределами окна
-</label>
-
-<label class="toggle-label">
-  <input type="checkbox" id="justify-text-toggle">
-  Выравнивание текста по ширине - лучше не включать
-</label>
-
-<label class="toggle-label">
-  Размер шрифта:
-  <input type="range" id="font-size-slider" min="12" max="32" value="18" style="width:80%; margin-top:4px;">
-</label>
-
-
-
-    `;
         box.appendChild(settingsPanel);
 
 
@@ -522,7 +546,7 @@
 
 
         const resetBtn = document.createElement('button');
-        resetBtn.textContent = 'Сбросить';
+        resetBtn.textContent = 'Сброс всех настроек';
         Object.assign(resetBtn.style, {
             padding: '4px 8px',
             marginBottom: '10px',
@@ -533,6 +557,20 @@
             color: '#fff'
         });
         settingsPanel.appendChild(resetBtn);
+
+        const testSoundBtn = document.createElement('button');
+        testSoundBtn.textContent = 'Тест звука';
+        Object.assign(testSoundBtn.style, {
+            padding: '4px 8px',
+            marginBottom: '10px',
+            marginLeft: '4px',
+            borderRadius: '4px',
+            border: 'none',
+            cursor: 'pointer',
+            background: 'rgb(52 138 255)',
+            color: '#fff'
+        });
+        settingsPanel.appendChild(testSoundBtn);
 
         const updateBtn = document.createElement('span');
         updateBtn.textContent = '🔄';
@@ -724,7 +762,7 @@
         resetBtn.addEventListener('click', () => {
             USERNAME = 'Guest' + Math.floor(100 + Math.random() * 900);
             nickInput.value = USERNAME;
-            themeToggle.checked = false;
+
             fontSlider.value = 16;
             box.style.background = 'rgb(42,34,38)';
             log.style.color = '#fff';
@@ -732,11 +770,24 @@
             input.style.color = '#fff';
             log.style.fontSize = '16px';
             input.style.fontSize = '16px';
+
             localStorage.setItem('chat_username', USERNAME);
             localStorage.setItem('chat_darkTheme', false);
             localStorage.setItem('chat_fontSize', 16);
             localStorage.setItem('chat_sounds', 'false');
+            localStorage.setItem('chat_snow', 'true');
+            localStorage.setItem('chat_resetOnStart', false);
+            localStorage.setItem('chat_justifyText', false);
+
+            justifyToggle.checked = false;
+            resetToggle.checked = false;
+            themeToggle.checked = false;
+            snowToggle.checked = true;
             soundToggle.checked = false;
+        });
+
+        testSoundBtn.addEventListener('click', () => {
+            soundChat.play().catch(e => console.error("Audio play failed:", e));
         });
 
         const style = document.createElement('style');
@@ -843,11 +894,11 @@
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                         allowfullscreen
                         style="border-radius:6px; box-shadow:0 0 2px rgba(0,0,0,0.3); vertical-align:top;"></iframe><a href="${href}" target="_blank" rel="noopener noreferrer" style="font-size:0.85em; color:#66b3ff;">🔗</a>`;
-                }
+}
 
-                // Изображения
-                if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(href)) {
-                    return `
+// Изображения
+if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(href)) {
+    return `
 <div style="display:flex; flex-wrap:wrap; align-items:flex-start; gap:6px; padding-top:0;">
     <!-- левый блок -->
     <div style="width:5ch; flex-shrink:0;"></div>
@@ -878,337 +929,337 @@
 </div>`;
                 }
 
-                // Обычная ссылка или текст
-                return `<div style="margin-top:0;">${url.startsWith('http') ? `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#66b3ff; text-decoration:underline;">${url}</a>` : url}</div>`;
-            });
+// Обычная ссылка или текст
+return `<div style="margin-top:0;">${url.startsWith('http') ? `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#66b3ff; text-decoration:underline;">${url}</a>` : url}</div>`;
+});
+}
+
+
+function getLog() {
+    let currentLog = document.querySelector('#log');
+    if (!currentLog) {
+        currentLog = document.createElement('div');
+        currentLog.id = 'log';
+        Object.assign(currentLog.style, {
+            flex: 1,
+            padding: '8px',
+            overflowY: 'auto',
+            fontSize: '16px',
+            color: '#fff',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+        });
+        box.appendChild(currentLog);
+    }
+    log = currentLog;
+    return currentLog;
+}
+function getUserCount() {
+    let currentCount = document.querySelector('.chat-user-count');
+
+    if (!currentCount || !document.body.contains(currentCount)) {
+        currentCount = document.createElement('span');
+        currentCount.classList.add('chat-element-resize-ready', 'chat-user-count');
+        Object.assign(currentCount.style, {
+            marginLeft: '10px',
+            fontSize: '14px',
+            fontWeight: 'normal',
+            color: '#ccc'
+        });
+        currentCount.textContent = '0 online';
+        box.appendChild(currentCount);
+    }
+
+    return currentCount;
+}
+
+function logMessage({
+    username,
+    text,
+    avatarUrl,
+    tooltipText,
+    timestamp = "",
+    skipSound = false,
+    restoring = false
+}) {
+
+    if (!restoring){
+        chatHistory.push({ username, text, avatarUrl, tooltipText, timestamp });
+    }
+
+    const log = getLog();
+    const savedFontSize = localStorage.getItem('chat_fontSize');
+
+    const line = document.createElement('div');
+    line.classList.add('chat-message');
+    Object.assign(line.style, {
+        display: 'block',
+        marginBottom: '4px',
+        lineHeight: '1.3em',
+        wordBreak: 'break-word',
+        whiteSpace: 'pre-wrap'
+    });
+
+    const content = document.createElement('span');
+    Object.assign(content.style, {
+        display: 'inline-block',
+        maxWidth: '100%',
+        textAlign: justifyText ? 'justify' : 'left',
+        textAlignLast: 'left',
+        wordSpacing: justifyText ? '0.2em' : 'normal'
+    });
+
+    let timeSpan = document.createElement('span');
+    timeSpan.classList.add('chat-time');
+
+    if (timestamp) {
+        let ts = timestamp;
+        const hasTimezone = /Z$|[+-]\d\d:\d\d$/.test(ts);
+        if (!hasTimezone) ts += 'Z';
+
+        const date = new Date(ts);
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const formattedTime = `${hours}:${minutes}`;
+
+        timeSpan.textContent = formattedTime;
+
+        if (lastMessageTime === formattedTime) {
+            timeSpan.style.color = '#414141ff';
+        } else {
+            timeSpan.style.color = '#d0d0d0ff';
+            lastMessageTime = formattedTime;
         }
 
+        Object.assign(timeSpan.style, {
+            fontSize: `${savedFontSize || 16}px`,
+            marginRight: '6px',
+            verticalAlign: 'middle',
+            display: 'inline-block',
+            width: '5ch',
+            fontFamily: 'monospace'
+        });
+    }
 
-        function getLog() {
-            let currentLog = document.querySelector('#log');
-            if (!currentLog) {
-                currentLog = document.createElement('div');
-                currentLog.id = 'log';
-                Object.assign(currentLog.style, {
-                    flex: 1,
-                    padding: '8px',
-                    overflowY: 'auto',
-                    fontSize: '16px',
-                    color: '#fff',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                });
-                box.appendChild(currentLog);
-            }
-            log = currentLog;
-            return currentLog;
-        }
-        function getUserCount() {
-            let currentCount = document.querySelector('.chat-user-count');
-
-            if (!currentCount || !document.body.contains(currentCount)) {
-                currentCount = document.createElement('span');
-                currentCount.classList.add('chat-element-resize-ready', 'chat-user-count');
-                Object.assign(currentCount.style, {
-                    marginLeft: '10px',
-                    fontSize: '14px',
-                    fontWeight: 'normal',
-                    color: '#ccc'
-                });
-                currentCount.textContent = '0 online';
-                box.appendChild(currentCount);
-            }
-
-            return currentCount;
-        }
-
-        function logMessage({
-            username,
-            text,
-            avatarUrl,
-            tooltipText,
-            timestamp = "",
-            skipSound = false,
-            restoring = false
-        }) {
-
-            if (!restoring){
-                chatHistory.push({ username, text, avatarUrl, tooltipText, timestamp });
-            }
-
-            const log = getLog();
-            const savedFontSize = localStorage.getItem('chat_fontSize');
-
-            const line = document.createElement('div');
-            line.classList.add('chat-message');
-            Object.assign(line.style, {
-                display: 'block',
-                marginBottom: '4px',
-                lineHeight: '1.3em',
-                wordBreak: 'break-word',
-                whiteSpace: 'pre-wrap'
-            });
-
-            const content = document.createElement('span');
-            Object.assign(content.style, {
-                display: 'inline-block',
-                maxWidth: '100%',
-                textAlign: justifyText ? 'justify' : 'left',
-                textAlignLast: 'left',
-                wordSpacing: justifyText ? '0.2em' : 'normal'
-            });
-
-            let timeSpan = document.createElement('span');
-            timeSpan.classList.add('chat-time');
-
-            if (timestamp) {
-                let ts = timestamp;
-                const hasTimezone = /Z$|[+-]\d\d:\d\d$/.test(ts);
-                if (!hasTimezone) ts += 'Z';
-
-                const date = new Date(ts);
-                const hours = String(date.getHours()).padStart(2, '0');
-                const minutes = String(date.getMinutes()).padStart(2, '0');
-                const formattedTime = `${hours}:${minutes}`;
-
-                timeSpan.textContent = formattedTime;
-
-                if (lastMessageTime === formattedTime) {
-                    timeSpan.style.color = '#414141ff';
-                } else {
-                    timeSpan.style.color = '#d0d0d0ff';
-                    lastMessageTime = formattedTime;
-                }
-
-                Object.assign(timeSpan.style, {
-                    fontSize: `${savedFontSize || 16}px`,
-                    marginRight: '6px',
-                    verticalAlign: 'middle',
-                    display: 'inline-block',
-                    width: '5ch',
-                    fontFamily: 'monospace'
-                });
-            }
-
-            content.appendChild(timeSpan);
+    content.appendChild(timeSpan);
 
 
-            const avatar = document.createElement('img');
-            avatar.src = avatarUrl || 'https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/guest-avatar.png';
-            Object.assign(avatar.style, {
-                width: '1.2em',
-                height: '1.2em',
-                borderRadius: '50%',
-                cursor: 'pointer',
-                boxShadow: '0 0 2px rgba(0,0,0,0.4)',
-                marginRight: '4px',
-                verticalAlign: 'middle'
-            });
-            avatar.addEventListener('mouseenter', () => { tooltip.textContent = tooltipText || username; tooltip.style.opacity = '1'; });
-            avatar.addEventListener('mouseleave', () => { tooltip.style.opacity = '0'; });
+    const avatar = document.createElement('img');
+    avatar.src = avatarUrl || 'https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/guest-avatar.png';
+    Object.assign(avatar.style, {
+        width: '1.2em',
+        height: '1.2em',
+        borderRadius: '50%',
+        cursor: 'pointer',
+        boxShadow: '0 0 2px rgba(0,0,0,0.4)',
+        marginRight: '4px',
+        verticalAlign: 'middle'
+    });
+    avatar.addEventListener('mouseenter', () => { tooltip.textContent = tooltipText || username; tooltip.style.opacity = '1'; });
+    avatar.addEventListener('mouseleave', () => { tooltip.style.opacity = '0'; });
 
-            let nameNode;
-            const isAuthorized =
-                  avatarUrl &&
-                  !avatarUrl.includes('guest-avatar') ||
-                  (tooltipText && tooltipText.toLowerCase().includes('verified'));
+    let nameNode;
+    const isAuthorized =
+          avatarUrl &&
+          !avatarUrl.includes('guest-avatar') ||
+          (tooltipText && tooltipText.toLowerCase().includes('verified'));
 
-            if (isAuthorized && username !== "Сервер") {
-                const link = document.createElement('a');
-                link.href = `https://osu.ppy.sh/users/${encodeURIComponent(username)}`;
-                link.target = '_blank';
-                link.textContent = username + ' ';
+    if (isAuthorized && username !== "Сервер") {
+        const link = document.createElement('a');
+        link.href = `https://osu.ppy.sh/users/${encodeURIComponent(username)}`;
+        link.target = '_blank';
+        link.textContent = username + ' ';
 
-                Object.assign(link.style, {
-                    fontWeight: 'bold',
-                    color: getNickColor(username),
-                    marginRight: '4px',
-                    verticalAlign: 'middle',
-                    textDecoration: 'none',
-                    cursor: 'pointer'
-                });
+        Object.assign(link.style, {
+            fontWeight: 'bold',
+            color: getNickColor(username),
+            marginRight: '4px',
+            verticalAlign: 'middle',
+            textDecoration: 'none',
+            cursor: 'pointer'
+        });
 
-                link.addEventListener('mouseenter', () => link.style.textDecoration = 'underline');
-                link.addEventListener('mouseleave', () => link.style.textDecoration = 'none');
+        link.addEventListener('mouseenter', () => link.style.textDecoration = 'underline');
+        link.addEventListener('mouseleave', () => link.style.textDecoration = 'none');
 
-                nameNode = link;
-            } else {
-                const span = document.createElement('span');
-                span.textContent = username + ':';
+        nameNode = link;
+    } else {
+        const span = document.createElement('span');
+        span.textContent = username + ':';
 
-                Object.assign(span.style, {
-                    fontWeight: 'bold',
-                    color: getNickColor(username),
-                    marginRight: '4px',
-                    verticalAlign: 'middle'
-                });
+        Object.assign(span.style, {
+            fontWeight: 'bold',
+            color: getNickColor(username),
+            marginRight: '4px',
+            verticalAlign: 'middle'
+        });
 
-                nameNode = span;
-            }
+        nameNode = span;
+    }
 
-            let adjustedText = text;
+    let adjustedText = text;
 
-            const firstSpace = text.indexOf(' ');
-            const firstWord = firstSpace === -1 ? text : text.slice(0, firstSpace);
-            if (firstWord.length > 15) {
-                adjustedText = ' ' + text;
-            }
+    const firstSpace = text.indexOf(' ');
+    const firstWord = firstSpace === -1 ? text : text.slice(0, firstSpace);
+    if (firstWord.length > 15) {
+        adjustedText = ' ' + text;
+    }
 
-            const textSpan = document.createElement('span');
-            textSpan.innerHTML = makeLinksClickable(adjustedText);
-            textSpan.style.verticalAlign = 'middle';
+    const textSpan = document.createElement('span');
+    textSpan.innerHTML = makeLinksClickable(adjustedText);
+    textSpan.style.verticalAlign = 'middle';
 
-            content.appendChild(avatar);
-            content.appendChild(nameNode);
-            content.appendChild(textSpan);
+    content.appendChild(avatar);
+    content.appendChild(nameNode);
+    content.appendChild(textSpan);
 
-            line.appendChild(content);
-            log.appendChild(line);
+    line.appendChild(content);
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+
+    if (!skipSound && soundToggle.checked) {
+        soundChat.play().catch(e => console.error("Audio play failed:", e));
+    }
+
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
             log.scrollTop = log.scrollHeight;
+        });
+    });
+}
 
-            if (!skipSound && soundToggle.checked) {
-                soundChat.play().catch(e => console.error("Audio play failed:", e));
-            }
+function restoreChatHistory() {
+    const log = getLog();
 
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    log.scrollTop = log.scrollHeight;
-                });
-            });
+    if (!chatHistory.length) return;
+    log.innerHTML = '';
+
+    chatHistory.forEach(msg => {
+        logMessage({
+            username: msg.username,
+            text: msg.text,
+            avatarUrl: msg.avatarUrl,
+            tooltipText: msg.tooltipText,
+            timestamp: msg.timestamp,
+            skipSound: true,
+            restoring: true
+        });
+    });
+}
+
+function createWebSocketConnection() {
+    if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+        getUserCount().textContent = `${lastUserCount} online`;
+        restoreChatHistory();
+        setupInputSender(wsConnection);
+        setupSendButton();
+        return wsConnection;
+    }
+
+    const ws = new WebSocket(WS_URL);
+    const state = { heartbeat: null };
+
+    ws.onopen = () => handleOpen(ws, state);
+    ws.onclose = () => handleClose(state);
+    ws.onmessage = handleMessage;
+    ws.onerror = handleError;
+
+
+    wsConnection = ws;
+    return ws;
+}
+
+
+function handleOpen(ws, state) {
+    logMessage({
+        username: 'Сервер',
+        text: '✅ Подключено',
+        avatarUrl: AVATAR_URL_SERVER,
+        skipSound: true
+    });
+
+    ws.send(JSON.stringify({
+        type: 'auth',
+        username: USERNAME,
+        version: EXT_VERSION
+    }));
+
+    setupInputSender(ws);
+    setupSendButton();
+
+    state.heartbeat = startHeartbeat(ws);
+}
+
+function handleMessage(e) {
+    try {
+        const msg = JSON.parse(e.data);
+
+        console.log(msg)
+
+        if (msg.type === 'heartbeat') return;
+        if (msg.total_users !== undefined) {
+            lastUserCount = msg.total_users
+            getUserCount().textContent = `${msg.total_users} online`;
         }
-
-        function restoreChatHistory() {
-            const log = getLog();
-
-            if (!chatHistory.length) return;
-            log.innerHTML = '';
-
-            chatHistory.forEach(msg => {
-                logMessage({
-                    username: msg.username,
-                    text: msg.text,
-                    avatarUrl: msg.avatarUrl,
-                    tooltipText: msg.tooltipText,
-                    timestamp: msg.timestamp,
-                    skipSound: true,
-                    restoring: true
-                });
-            });
+        if (msg.type === 'online_refresh') {
+            getUserCount().textContent = `${msg.total_users} online`;
+            return;
         }
-
-        function createWebSocketConnection() {
-            if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
-                getUserCount().textContent = `${lastUserCount} online`;
-                restoreChatHistory();
-                setupInputSender(wsConnection);
-                setupSendButton();
-                return wsConnection;
-            }
-
-            const ws = new WebSocket(WS_URL);
-            const state = { heartbeat: null };
-
-            ws.onopen = () => handleOpen(ws, state);
-            ws.onclose = () => handleClose(state);
-            ws.onmessage = handleMessage;
-            ws.onerror = handleError;
-
-
-            wsConnection = ws;
-            return ws;
+        if (msg.type === 'update_available') {
+            return showUpdateMessage(msg);
         }
-
-
-        function handleOpen(ws, state) {
-            logMessage({
-                username: 'Сервер',
-                text: '✅ Подключено',
-                avatarUrl: AVATAR_URL_SERVER,
-                skipSound: true
-            });
-
-            ws.send(JSON.stringify({
-                type: 'auth',
-                username: USERNAME,
-                version: EXT_VERSION
-            }));
-
-            setupInputSender(ws);
-            setupSendButton();
-
-            state.heartbeat = startHeartbeat(ws);
-        }
-
-        function handleMessage(e) {
-            try {
-                const msg = JSON.parse(e.data);
-
-                console.log(msg)
-
-                if (msg.type === 'heartbeat') return;
-                if (msg.total_users !== undefined) {
-                    lastUserCount = msg.total_users
-                    getUserCount().textContent = `${msg.total_users} online`;
-                }
-                if (msg.type === 'online_refresh') {
-                    getUserCount().textContent = `${msg.total_users} online`;
-                    return;
-                }
-                if (msg.type === 'update_available') {
-                    return showUpdateMessage(msg);
-                }
-                if (msg.type === 'error') {
-                    return logMessage({
-                        username: 'Сервер',
-                        text: `⚠️ ${msg.message}`,
-                        avatarUrl: AVATAR_URL_SERVER,
-                        skipSound: true
-                    });
-                }
-                if (msg.type === 'history_bulk') {
-                    msg.messages.forEach(m => {
-                        logMessage({
-                            username: m.username,
-                            text: m.message,
-                            avatarUrl: m.avatar,
-                            tooltipText: m.tooltip,
-                            timestamp: m.timestamp,
-                            skipSound: true
-                        });
-                    });
-                }
-                if (msg.type === 'message') {
-                    return logMessage({
-                        username: msg.username,
-                        text: msg.message,
-                        avatarUrl: msg.avatar,
-                        tooltipText: msg.tooltip,
-                        timestamp: msg.timestamp
-                    });
-                }
-
-            } catch {
-                logMessage({
-                    username: 'Система',
-                    text: `⚠️ ${e.data}`,
-                    avatarUrl: AVATAR_URL_SERVER,
-                    skipSound: true
-                });
-
-            }
-        }
-
-        function showUpdateMessage(msg) {
-            logMessage({
+        if (msg.type === 'error') {
+            return logMessage({
                 username: 'Сервер',
                 text: `⚠️ ${msg.message}`,
                 avatarUrl: AVATAR_URL_SERVER,
                 skipSound: true
             });
+        }
+        if (msg.type === 'history_bulk') {
+            msg.messages.forEach(m => {
+                logMessage({
+                    username: m.username,
+                    text: m.message,
+                    avatarUrl: m.avatar,
+                    tooltipText: m.tooltip,
+                    timestamp: m.timestamp,
+                    skipSound: true
+                });
+            });
+        }
+        if (msg.type === 'message') {
+            return logMessage({
+                username: msg.username,
+                text: msg.message,
+                avatarUrl: msg.avatar,
+                tooltipText: msg.tooltip,
+                timestamp: msg.timestamp
+            });
+        }
 
-            latestVersion = msg.latest_version;
+    } catch {
+        logMessage({
+            username: 'Система',
+            text: `⚠️ ${e.data}`,
+            avatarUrl: AVATAR_URL_SERVER,
+            skipSound: true
+        });
 
-            updatePanel.innerHTML = `
+    }
+}
+
+function showUpdateMessage(msg) {
+    logMessage({
+        username: 'Сервер',
+        text: `⚠️ ${msg.message}`,
+        avatarUrl: AVATAR_URL_SERVER,
+        skipSound: true
+    });
+
+    latestVersion = msg.latest_version;
+
+    updatePanel.innerHTML = `
         <div style="font-weight:bold; font-size:18px; margin-top:10px; margin-bottom:8px;">🔄 Обновление</div>
         <div style="font-size:14px; margin-bottom:4px;">Текущая версия: ${EXT_VERSION}</div>
         <div style="font-size:14px; margin-bottom:8px;">Доступна новая версия: ${latestVersion}</div>
@@ -1226,103 +1277,103 @@
             updateBtn.classList.add('pulse');
         }
 
-        function startHeartbeat(ws) {
-            return setInterval(() => {
-                if (ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: 'heartbeat' }));
-                }
-            }, HEARTBEAT_INTERVAL);
+function startHeartbeat(ws) {
+    return setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'heartbeat' }));
         }
+    }, HEARTBEAT_INTERVAL);
+}
 
-        function handleClose(state) {
-            logMessage({
-                username: 'Сервер',
-                text: '❌ Отключено',
-                avatarUrl: AVATAR_URL_SERVER,
-                skipSound: true
-            });
-            clearInterval(state.heartbeat);
-            wsConnection = null;
-        }
+function handleClose(state) {
+    logMessage({
+        username: 'Сервер',
+        text: '❌ Отключено',
+        avatarUrl: AVATAR_URL_SERVER,
+        skipSound: true
+    });
+    clearInterval(state.heartbeat);
+    wsConnection = null;
+}
 
-        function handleError() {
-            logMessage({
-                username: 'Сервер',
-                text: '⚠️ Нет связи',
-                avatarUrl: AVATAR_URL_SERVER,
-                skipSound: true
-            });
-        }
+function handleError() {
+    logMessage({
+        username: 'Сервер',
+        text: '⚠️ Нет связи',
+        avatarUrl: AVATAR_URL_SERVER,
+        skipSound: true
+    });
+}
 
-        function setupInputSender(ws) {
-            if (!input) return;
+function setupInputSender(ws) {
+    if (!input) return;
 
-            let cooldown = false;
-            input.addEventListener('keydown', e => {
-                if (e.key !== 'Enter') return;
-                if (cooldown || input.value.trim() === '') return e.preventDefault();
+    let cooldown = false;
+    input.addEventListener('keydown', e => {
+        if (e.key !== 'Enter') return;
+        if (cooldown || input.value.trim() === '') return e.preventDefault();
 
-                ws.send(JSON.stringify({
-                    type: 'message',
-                    username: USERNAME,
-                    message: input.value.trim(),
-                    timestamp: new Date().toISOString()
-                }));
+        ws.send(JSON.stringify({
+            type: 'message',
+            username: USERNAME,
+            message: input.value.trim(),
+            timestamp: new Date().toISOString()
+        }));
 
-                input.value = '';
-                cooldown = true;
-                input.style.transition = '';
-                input.style.background = 'rgb(0,102,51)';
+        input.value = '';
+        cooldown = true;
+        input.style.transition = '';
+        input.style.background = 'rgb(0,102,51)';
 
-                setTimeout(() => {
-                    input.style.transition = 'background 0.5s';
-                    input.style.background = 'rgb(70,57,63)';
-                    cooldown = false;
-                }, 1000);
-            });
-        }
+        setTimeout(() => {
+            input.style.transition = 'background 0.5s';
+            input.style.background = 'rgb(70,57,63)';
+            cooldown = false;
+        }, 1000);
+    });
+}
 
-        function setupSendButton() {
-            sendButton = document.createElement('span');
-            sendButton.textContent = '📨';
-            Object.assign(sendButton.style, {
-                fontSize: '32px',
-                position: 'absolute',
-                right: '4px',
-                bottom: '4px',
-                cursor: 'pointer',
-                zIndex: 1000000,
-                userSelect: 'none'
-            });
+function setupSendButton() {
+    sendButton = document.createElement('span');
+    sendButton.textContent = '📨';
+    Object.assign(sendButton.style, {
+        fontSize: '32px',
+        position: 'absolute',
+        right: '4px',
+        bottom: '4px',
+        cursor: 'pointer',
+        zIndex: 1000000,
+        userSelect: 'none'
+    });
 
-            box.appendChild(sendButton);
+    box.appendChild(sendButton);
 
-            sendButton.addEventListener('click', () => {
-                if (input) input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
-                if (input) input.focus();
-            });
-        }
+    sendButton.addEventListener('click', () => {
+        if (input) input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+        if (input) input.focus();
+    });
+}
 
-        createWebSocketConnection();
+createWebSocketConnection();
+}
+
+function checkChatBox() {
+    const expectedId = PREFIX + lastId;
+    const existing = document.querySelector(`[id^="${PREFIX}"]`);
+
+    if (!existing) {
+        initChat();
+        return;
     }
 
-    function checkChatBox() {
-        const expectedId = PREFIX + lastId;
-        const existing = document.querySelector(`[id^="${PREFIX}"]`);
-
-        if (!existing) {
-            initChat();
-            return;
-        }
-
-        if (existing.id !== expectedId) {
-            existing.remove();
-            initChat();
-            return;
-        }
+    if (existing.id !== expectedId) {
+        existing.remove();
+        initChat();
+        return;
     }
+}
 
-    setInterval(checkChatBox, 250);
+setInterval(checkChatBox, 250);
 
 })();
 
