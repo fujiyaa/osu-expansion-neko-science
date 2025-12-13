@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu-expansion-neko-science
 // @namespace    https://github.com/fujiyaa/osu-expansion-neko-science
-// @version      0.4.5-beta
+// @version      0.4.6-beta
 // @description  Расширение для осу очень нужное
 // @author       Fujiya
 // @match        https://osu.ppy.sh/*
@@ -10,13 +10,14 @@
 // @updateURL    https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/inspector.user.js
 // ==/UserScript==
 
-// Что нового в 0.4.4 -> 0.4.5:
-// - Оптимизация снега от G1RL4NDA
+// Что нового в 0.4.5 -> 0.4.6:
+// - Звук сообщений исправлен и не играется рандомно!
+// - Оптимизация снега, теперь ресурсы не тратятся когда вкладка не активна
 
 (function() {
     'use strict';
 
-    const EXT_VERSION = '0.4.5-beta';
+    const EXT_VERSION = '0.4.6-beta';
 
     let RESET_ON_START = localStorage.getItem('chat_resetOnStart') === 'true'; // поменять на false на один запуск, если чат остался за пределами окна
 
@@ -77,17 +78,20 @@
         let existingBox = document.querySelector('#' + BOX_ID);
         if (existingBox) return;
 
+
         (function() {
             const SNOWFLAKE_COUNT = 80;
-            const SNOWFLAKE_MIN_SPEED = 0.3;
-            const SNOWFLAKE_MAX_SPEED = 0.5;
-            const SNOWFLAKE_RADIUS = 5.0;
-            const ACCUMULATION_LIMIT = 20;
+            const SNOWFLAKE_MAX_SPEED = 0.003;
+            const SNOWFLAKE_MIN_SPEED = 0.002;
+            const SNOWFLAKE_SIZE_MAX = 12;
+            const SNOWFLAKE_SIZE_MIN = 2;
+            const DRIFT_AMOUNT = 0.0005;
+            const SPEED_FALLOFF = 0.7;
+            const DRIFT_FALLOFF = 1.0;
 
             const canvas = document.createElement('canvas');
-            canvas.id = 'snowCanvas';
+            canvas.id = 'snowGL';
             document.body.appendChild(canvas);
-
             Object.assign(canvas.style, {
                 position: 'fixed',
                 top: '0',
@@ -97,128 +101,173 @@
                 pointerEvents: 'none',
                 zIndex: '0'
             });
-            const ctx = canvas.getContext('2d');
+
+            const gl = canvas.getContext('webgl');
+            if (!gl) return console.error('WebGL');
+
             let w = canvas.width = window.innerWidth;
             let h = canvas.height = window.innerHeight;
 
-            const snowLayer = document.createElement('canvas');
-            const snowCtx = snowLayer.getContext('2d');
-            snowLayer.width = w;
-            snowLayer.height = h;
+            const vertexShaderSource = `
+        attribute vec2 a_position;
+        attribute float a_pointSize;
+        void main() {
+            gl_PointSize = a_pointSize;
+            gl_Position = vec4(a_position, 0.0, 1.0);
+        }
+    `;
 
-            let accumulation = new Array(w).fill(0);
+    const fragmentShaderSource = `
+        precision mediump float;
+        void main() {
+            vec2 coord = gl_PointCoord * 2.0 - 1.0; // нормализуем в [-1,1]
+            float dist = dot(coord, coord);
+            if (dist > 1.0) discard;
+            gl_FragColor = vec4(1.0, 1.0, 1.0, 0.8);
+        }
+    `;
 
-            let snowflakes = [];
-            for (let i = 0; i < SNOWFLAKE_COUNT; i++) {
-                const speed = SNOWFLAKE_MIN_SPEED + Math.random() * (SNOWFLAKE_MAX_SPEED - SNOWFLAKE_MIN_SPEED);
+    function createShader(type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(shader));
+        }
+        return shader;
+    }
 
-                snowflakes.push({
-                    x: Math.random() * w,
-                    y: Math.random() * h,
-                    speed: speed,
-                    radius: SNOWFLAKE_RADIUS * (speed / SNOWFLAKE_MAX_SPEED),
-                    drift: 0,
-                    time: Math.random() * 100
-                });
+    const vertexShader = createShader(gl.VERTEX_SHADER, vertexShaderSource);
+    const fragmentShader = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+
+    const program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error(gl.getProgramInfoLog(program));
+    }
+    gl.useProgram(program);
+
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    const aPosition = gl.getAttribLocation(program, 'a_position');
+    gl.enableVertexAttribArray(aPosition);
+    gl.vertexAttribPointer(aPosition, 2, gl.FLOAT, false, 0, 0);
+
+    const pointSizeBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, pointSizeBuffer);
+    const aPointSize = gl.getAttribLocation(program, 'a_pointSize');
+    gl.enableVertexAttribArray(aPointSize);
+    gl.vertexAttribPointer(aPointSize, 1, gl.FLOAT, false, 0, 0);
+
+    // Генерация снежинок
+    let snowflakes = [];
+    for (let i = 0; i < SNOWFLAKE_COUNT; i++) {
+        const size = SNOWFLAKE_SIZE_MIN + Math.random() * (SNOWFLAKE_SIZE_MAX - SNOWFLAKE_SIZE_MIN);
+
+        // Скорость пропорциональна размеру
+        const speed = SNOWFLAKE_MIN_SPEED + (size - SNOWFLAKE_SIZE_MIN) / (SNOWFLAKE_SIZE_MAX - SNOWFLAKE_SIZE_MIN) * (SNOWFLAKE_MAX_SPEED - SNOWFLAKE_MIN_SPEED);
+
+        const driftDirection = Math.random() < 0.5 ? -1 : 1;
+        const driftStrength = 0.7 + Math.random() * 0.3;
+
+        snowflakes.push({
+            x: Math.random() * 2 - 1,
+            y: Math.random() * 4 - 1,
+            size,
+            speed,
+            driftDirection,
+            driftStrength
+        });
+    }
+
+    const positions = new Float32Array(SNOWFLAKE_COUNT * 2);
+    const sizes = new Float32Array(SNOWFLAKE_COUNT);
+
+    snowflakes.forEach((f, i) => {
+        positions[i * 2] = f.x;
+        positions[i * 2 + 1] = f.y;
+        sizes[i] = f.size;
+    });
+
+
+    // Выделяем буферы один раз
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, pointSizeBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, sizes, gl.DYNAMIC_DRAW);
+
+    function resize() {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = window.innerHeight;
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    }
+    window.addEventListener('resize', resize);
+
+    // LUT для синуса (16 шагов, можно увеличить)
+    const SIN_STEPS = 16;
+    const sinTable = new Float32Array(SIN_STEPS);
+    for (let i = 0; i < SIN_STEPS; i++) {
+        sinTable[i] = Math.sin((i / (SIN_STEPS - 1)) * (Math.PI / 2));
+    }
+
+    function sinApprox(value) {
+        // value = 0..1
+        const idx = Math.floor(value * (SIN_STEPS - 1));
+        return sinTable[idx];
+    }
+
+    let lastTime = 0;
+    const targetFPS = 60;
+    const frameDuration = 1000 / targetFPS;
+
+    function draw(timestamp) {
+        if (timestamp - lastTime < frameDuration) {
+            requestAnimationFrame(draw);
+            return;
+        }
+        lastTime = timestamp;
+
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        snowflakes.forEach((f, i) => {
+            let normalizedY = (1 - (f.y + 1) / 2);
+            let speedFactor = Math.max(1 - SPEED_FALLOFF * normalizedY, 0.1);
+            f.y -= f.speed * speedFactor;
+
+            let driftFactor = (1 - normalizedY) * (1 - DRIFT_FALLOFF) + DRIFT_FALLOFF;
+            f.x += sinApprox(1 - normalizedY) * DRIFT_AMOUNT * driftFactor * f.driftStrength * f.driftDirection;
+
+            if (f.x < -1) f.x += 2;
+            else if (f.x > 1) f.x -= 2;
+
+            if (f.y < -1) {
+                f.y = 1;
+                f.x = Math.random() * 2 - 1;
             }
 
-            let mouseX = 0;
-            let lastMouseX = 0;
+            positions[i * 2] = f.x;
+            positions[i * 2 + 1] = f.y;
+        });
 
-            //window.addEventListener('mousemove', e => {
-            //    mouseX = e.clientX;
-            //});
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, positions);
 
-            window.addEventListener('resize', () => {
-                w = canvas.width = window.innerWidth;
-                h = canvas.height = window.innerHeight;
+        gl.drawArrays(gl.POINTS, 0, SNOWFLAKE_COUNT);
 
-                snowLayer.width = w;
-                snowLayer.height = h;
-
-                accumulation = new Array(w).fill(0);
-                updateSnowLayer();
-            });
+        requestAnimationFrame(draw);
+    }
 
 
-            function updateSnowLayer() {
-                snowCtx.clearRect(0, 0, w, h);
-                snowCtx.fillStyle = 'rgba(255,255,255,0.7)';
-                snowCtx.beginPath();
+    gl.clearColor(0, 0, 0, 0);
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    draw();
+})();
 
-                for (let i = 0; i < w; i++) {
-                    let height = accumulation[i];
-                    if (height > 0) {
-                        snowCtx.rect(i, h - height, 1, height);
-                    }
-                }
 
-                snowCtx.fill();
-            }
 
-            let lastTimestamp = performance.now();
-
-            function drawSnow(timestamp) {
-                if (!snowEnabled) {
-                    requestAnimationFrame(drawSnow);
-                    return;
-                }
-
-                let deltaTime = (timestamp - lastTimestamp) / 1000;
-                lastTimestamp = timestamp;
-
-                ctx.clearRect(0, 0, w, h);
-
-                let deltaX = mouseX - lastMouseX;
-
-                snowflakes.forEach(flake => {
-                    flake.drift = -deltaX * 0.05;
-
-                    let idx = Math.floor(flake.x);
-                    if (idx < 0) idx = 0;
-                    if (idx >= w) idx = w - 1;
-
-                    let normalizedY = flake.y / (h - accumulation[idx]);
-                    normalizedY = Math.min(1, normalizedY);
-
-                    let minSpeedFactor = 0.3;
-                    let speedFactor = minSpeedFactor + (1 - minSpeedFactor) * Math.exp(-3 * normalizedY);
-                    let vy = flake.speed * speedFactor;
-
-                    flake.time += deltaTime;
-                    let flakeDeltaX = Math.sin(flake.time) + Math.sin(flake.time * 2);
-
-                    flake.x += flakeDeltaX * 0.2;
-                    flake.y += vy;
-
-                    if (flake.x < 0) flake.x += w;
-                    if (flake.x > w) flake.x -= w;
-
-                    if (flake.y >= h - accumulation[idx]) {
-                        accumulation[idx] = Math.min(accumulation[idx] + 0.7, ACCUMULATION_LIMIT);
-                        if (idx > 0) accumulation[idx - 1] = Math.min(accumulation[idx - 1] + 0.3, ACCUMULATION_LIMIT);
-                        if (idx < w - 1) accumulation[idx + 1] = Math.min(accumulation[idx + 1] + 0.3, ACCUMULATION_LIMIT);
-
-                        updateSnowLayer();
-                        flake.y = 0;
-                        flake.x = Math.random() * w;
-                    }
-
-                    ctx.beginPath();
-                    ctx.arc(flake.x, flake.y, flake.radius, 0, Math.PI * 2);
-                    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-                    ctx.fill();
-                });
-
-                ctx.drawImage(snowLayer, 0, 0);
-
-                lastMouseX = mouseX;
-                requestAnimationFrame(drawSnow);
-            }
-
-            requestAnimationFrame(drawSnow);
-
-        })();
 
         const elements = document.querySelectorAll('.osu-page--forum, .osu-page--forum-topic');
 
@@ -873,7 +922,15 @@
             return currentCount;
         }
 
-        function logMessage(username, text, avatarUrl, tooltipText, timestamp = "", skipSound = false, restoring = false) {
+        function logMessage({
+            username,
+            text,
+            avatarUrl,
+            tooltipText,
+            timestamp = "",
+            skipSound = false,
+            restoring = false
+        }) {
 
             if (!restoring){
                 chatHistory.push({ username, text, avatarUrl, tooltipText, timestamp });
@@ -952,9 +1009,9 @@
 
             let nameNode;
             const isAuthorized =
-                avatarUrl &&
-                !avatarUrl.includes('guest-avatar') ||
-                (tooltipText && tooltipText.toLowerCase().includes('verified'));
+                  avatarUrl &&
+                  !avatarUrl.includes('guest-avatar') ||
+                  (tooltipText && tooltipText.toLowerCase().includes('verified'));
 
             if (isAuthorized && username !== "Сервер") {
                 const link = document.createElement('a');
@@ -1025,8 +1082,17 @@
 
             if (!chatHistory.length) return;
             log.innerHTML = '';
+
             chatHistory.forEach(msg => {
-                logMessage(msg.username, msg.text, msg.avatarUrl, msg.tooltipText, msg.timestamp, true, true);
+                logMessage({
+                    username: msg.username,
+                    text: msg.text,
+                    avatarUrl: msg.avatarUrl,
+                    tooltipText: msg.tooltipText,
+                    timestamp: msg.timestamp,
+                    skipSound: true,
+                    restoring: true
+                });
             });
         }
 
@@ -1054,7 +1120,12 @@
 
 
         function handleOpen(ws, state) {
-            logMessage('Сервер', '✅ Подключено', AVATAR_URL_SERVER, true);
+            logMessage({
+                username: 'Сервер',
+                text: '✅ Подключено',
+                avatarUrl: AVATAR_URL_SERVER,
+                skipSound: true
+            });
 
             ws.send(JSON.stringify({
                 type: 'auth',
@@ -1087,24 +1158,54 @@
                     return showUpdateMessage(msg);
                 }
                 if (msg.type === 'error') {
-                    return logMessage('Сервер', `⚠️ ${msg.message}`, AVATAR_URL_SERVER, true)
+                    return logMessage({
+                        username: 'Сервер',
+                        text: `⚠️ ${msg.message}`,
+                        avatarUrl: AVATAR_URL_SERVER,
+                        skipSound: true
+                    });
                 }
                 if (msg.type === 'history_bulk') {
                     msg.messages.forEach(m => {
-                        logMessage(m.username, m.message, m.avatar, m.tooltip, m.timestamp, true);
+                        logMessage({
+                            username: m.username,
+                            text: m.message,
+                            avatarUrl: m.avatar,
+                            tooltipText: m.tooltip,
+                            timestamp: m.timestamp,
+                            skipSound: true
+                        });
                     });
                 }
                 if (msg.type === 'message') {
-                    return logMessage(msg.username, msg.message, msg.avatar, msg.tooltip, msg.timestamp);
+                    return logMessage({
+                        username: msg.username,
+                        text: msg.message,
+                        avatarUrl: msg.avatar,
+                        tooltipText: msg.tooltip,
+                        timestamp: msg.timestamp
+                    });
                 }
 
             } catch {
-                logMessage('System', e.data, true);
+                logMessage({
+                    username: 'Система',
+                    text: `⚠️ ${e.data}`,
+                    avatarUrl: AVATAR_URL_SERVER,
+                    skipSound: true
+                });
+
             }
         }
 
         function showUpdateMessage(msg) {
-            logMessage('Сервер', `⚠️ ${msg.message}`, AVATAR_URL_SERVER, true);
+            logMessage({
+                username: 'Сервер',
+                text: `⚠️ ${msg.message}`,
+                avatarUrl: AVATAR_URL_SERVER,
+                skipSound: true
+            });
+
             latestVersion = msg.latest_version;
 
             updatePanel.innerHTML = `
@@ -1134,13 +1235,23 @@
         }
 
         function handleClose(state) {
-            logMessage('Сервер','❌ Отключено', AVATAR_URL_SERVER);
+            logMessage({
+                username: 'Сервер',
+                text: '❌ Отключено',
+                avatarUrl: AVATAR_URL_SERVER,
+                skipSound: true
+            });
             clearInterval(state.heartbeat);
             wsConnection = null;
         }
 
         function handleError() {
-            logMessage('Сервер','⚠️ Нет связи', AVATAR_URL_SERVER, true);
+            logMessage({
+                username: 'Сервер',
+                text: '⚠️ Нет связи',
+                avatarUrl: AVATAR_URL_SERVER,
+                skipSound: true
+            });
         }
 
         function setupInputSender(ws) {
