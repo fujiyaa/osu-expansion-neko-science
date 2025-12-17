@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu-expansion-neko-science
 // @namespace    https://github.com/fujiyaa/osu-expansion-neko-science
-// @version      0.4.7-beta
+// @version      0.4.8-beta
 // @description  Расширение для осу очень нужное
 // @author       Fujiya
 // @match        https://osu.ppy.sh/*
@@ -10,15 +10,13 @@
 // @updateURL    https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/inspector.user.js
 // ==/UserScript==
 
-// Что нового в 0.4.6 -> 0.4.7:
-// - Раздел настроек обновлен
-// - Звук сообщений исправлен (0.4.6) + кнопка теста звука
-// - Оптимизация снега (0.4.6) + тоггл снега снова работает
+// Что нового в 0.4.7 -> 0.4.8:
+// - Оптимизация
 
 (function() {
     'use strict';
 
-    const EXT_VERSION = '0.4.7-beta';
+    const EXT_VERSION = '0.4.8-beta';
 
     let RESET_ON_START = localStorage.getItem('chat_resetOnStart') === 'true'; // поменять на false на один запуск, если чат остался за пределами окна
 
@@ -40,10 +38,12 @@
     const BOX_ID = 'neko-chat-box';
     let latestVersion = EXT_VERSION;
     const WS_URL = 'wss://myangelfujiya.ru/chat/ws';
-    //const WS_URL = 'ws://127.0.0.1:8000/chat/ws'; dev server
+    //const WS_URL = 'ws://127.0.0.1:8000/chat/ws';// dev server
 
     let wsConnection = null;
     const chatHistory = [];
+    let user_presence = null;
+    let path;
 
     let sendButton;
     let input;
@@ -78,6 +78,14 @@
         let existingBox = document.querySelector('#' + BOX_ID);
         if (existingBox) return;
 
+        path = location.pathname;
+        user_presence = path;
+
+        //const match = path.match(/^\/community\/forums\/topics\/(\d+)/);
+        //
+        //if (match) {
+        //    const topicId = match[1];
+        //}
 
         (function() {
             if (snowEnabled) {
@@ -1153,6 +1161,7 @@ function createWebSocketConnection() {
         restoreChatHistory();
         setupInputSender(wsConnection);
         setupSendButton();
+        userPresence(wsConnection);
         return wsConnection;
     }
 
@@ -1166,6 +1175,7 @@ function createWebSocketConnection() {
 
 
     wsConnection = ws;
+    userPresence(wsConnection);
     return ws;
 }
 
@@ -1284,6 +1294,27 @@ function startHeartbeat(ws) {
         }
     }, HEARTBEAT_INTERVAL);
 }
+
+function sendPresence(ws) {
+    const path = location.pathname;
+
+    ws.send(JSON.stringify({
+        type: 'presence',
+        username: USERNAME,
+        message: path
+    }));
+}
+
+function userPresence(ws) {
+    if (ws.readyState === WebSocket.OPEN) {
+        sendPresence(ws);
+    } else if (ws.readyState === WebSocket.CONNECTING) {
+        ws.addEventListener('open', () => {
+            sendPresence(ws);
+        }, { once: true });
+    }
+}
+
 
 function handleClose(state) {
     logMessage({
