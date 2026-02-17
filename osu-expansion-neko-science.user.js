@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         osu-expansion-neko-science
 // @namespace    https://github.com/fujiyaa/osu-expansion-neko-science
-// @version      0.4.8-beta
+// @version      0.4.9-beta
 // @description  Расширение для осу очень нужное
 // @author       Fujiya
 // @match        https://osu.ppy.sh/*
@@ -10,13 +10,13 @@
 // @updateURL    https://github.com/fujiyaa/osu-expansion-neko-science/raw/main/inspector.user.js
 // ==/UserScript==
 
-// Что нового в 0.4.7 -> 0.4.8:
-// - Оптимизация
+// Что нового в 0.4.8 -> 0.4.9:
+// - Исправлена невозможность выключить снег
 
 (function() {
     'use strict';
 
-    const EXT_VERSION = '0.4.8-beta';
+    const EXT_VERSION = '0.4.9-beta';
 
     let RESET_ON_START = localStorage.getItem('chat_resetOnStart') === 'true'; // поменять на false на один запуск, если чат остался за пределами окна
 
@@ -52,7 +52,9 @@
     let lastUserCount = 0;
 
     let justifyText = false
-    let snowEnabled = localStorage.getItem('chat_snow') || true;
+    let snowEnabled = localStorage.getItem('chat_snow');
+    snowEnabled = snowEnabled === null ? true : snowEnabled === 'true';
+
 
     const AVATAR_URL_SERVER = "https://raw.githubusercontent.com/fujiyaa/osu-expansion-neko-science/refs/heads/main/chat_icons/server-avatar.png"
     const soundChat = new Audio("https://fujiyaa.github.io/forum/extras/default_chat.mp3");
@@ -241,7 +243,7 @@
                         f.y -= f.speed * speedFactor;
 
                         let driftFactor = (1 - normalizedY) * (1 - DRIFT_FALLOFF) + DRIFT_FALLOFF;
-                        f.x += sinApprox(1 - normalizedY) * DRIFT_AMOUNT * driftFactor * f.driftStrength * f.driftDirection;
+                        f.x += sinApprox(1 - normalizedY) * DRIFT_AMOUNT * driftFactor * f.driftStrength * f.driftDirection * (Math.random());
 
                         if (f.x < -1) f.x += 2;
                         else if (f.x > 1) f.x -= 2;
